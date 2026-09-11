@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Apple, CalendarDays, Check, Clock3, Dumbbell, FileUp, Image as ImageIcon, LogIn, Plus, Sandwich, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
+import { Apple, ArrowUpDown, CalendarDays, Check, ChevronRight, Clock3, Dumbbell, FileUp, Image as ImageIcon, LogIn, Plus, Sandwich, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import type { Tables } from "@/integrations/supabase/types";
@@ -74,10 +74,12 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const [tab, setTab] = useState<Tab>("plano");
+  const [genCount, setGenCount] = useState(0);
   const [children, setChildren] = useState<Child[]>(demoChildren);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [lunchboxes, setLunchboxes] = useState<Lunchbox[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
+  const [pickedRecipes, setPickedRecipes] = useState<string[]>([]);
   const [plan, setPlan] = useState<PlanCell[]>([]);
   const [familyMode, setFamilyMode] = useState(true);
   const [period, setPeriod] = useState<"week" | "month">("week");
@@ -152,27 +154,59 @@ function Index() {
     return chosen.length ? chosen : lunchboxes;
   }, [lunchboxes, picked]);
 
+  const recipePool = useMemo(() => recipes.filter((r) => pickedRecipes.includes(r.id)), [recipes, pickedRecipes]);
+
   useEffect(() => {
     if ((!pool.length && !recipes.length) || plan.length) return;
+    type Cand = { id: string; box?: Lunchbox; recipe?: Recipe };
     const next: PlanCell[] = [];
+    const rand = <T,>(list: T[]) => list[Math.floor(Math.random() * list.length)];
     const fits = (box: Lunchbox, age: number, training: boolean) => box.min_age <= age && box.max_age >= age && (!training || box.training_suitable);
+    const fitsRecipe = (r: Recipe, age: number, training: boolean) => r.min_age <= age && r.max_age >= age && (!training || r.training_suitable);
+    const usedCommon = new Set<string>();
+    const yesterdayByChild = new Map<string, Set<string>>();
     for (let day = 0; day < 5; day++) {
-      const trainingDay = children.some((c) => c.training_days.includes(day));
-      const common = pool.filter((b) => children.every((c) => fits(b, c.age, c.training_days.includes(day) && trainingDay)))[day % Math.max(pool.length, 1)] ?? pool[day % Math.max(pool.length, 1)];
+      let common: Cand | undefined;
+      if (familyMode && children.length > 1) {
+        const cands: Cand[] = [
+          ...pool.filter((b) => children.every((c) => fits(b, c.age, c.training_days.includes(day)))).map((box) => ({ id: box.id, box })),
+          ...recipePool.filter((r) => children.every((c) => fitsRecipe(r, c.age, c.training_days.includes(day)))).map((recipe) => ({ id: recipe.id, recipe })),
+        ];
+        let fresh = cands.filter((c) => !usedCommon.has(c.id));
+        if (!fresh.length) { usedCommon.clear(); fresh = cands; }
+        common = fresh.length ? rand(fresh) : undefined;
+        if (common) usedCommon.add(common.id);
+      }
       children.forEach((child) => {
+        const usedToday = new Set<string>();
+        const yesterday = yesterdayByChild.get(child.id) ?? new Set<string>();
+        const todayIds: string[] = [];
         for (let snack = 1; snack <= child.snacks_per_day; snack++) {
           const training = child.training_days.includes(day);
-          const suitable = pool.filter((b) => fits(b, child.age, training));
-          const box = snack === 1 && common && fits(common, child.age, training) ? common : suitable[(day + snack) % Math.max(suitable.length, 1)] ?? common;
-          if (box) { next.push({ childId: child.id, day, snack, recipeId: null, lunchboxId: box.id, training }); continue; }
-          const okRecipes = recipes.filter((r) => r.min_age <= child.age && r.max_age >= child.age && (!training || r.training_suitable));
-          const recipe = okRecipes[(day + snack) % Math.max(okRecipes.length, 1)] ?? recipes[0];
-          if (recipe) next.push({ childId: child.id, day, snack, recipeId: recipe.id, lunchboxId: null, training });
+          const cands: Cand[] = [
+            ...pool.filter((b) => fits(b, child.age, training)).map((box) => ({ id: box.id, box })),
+            ...recipePool.filter((r) => fitsRecipe(r, child.age, training)).map((recipe) => ({ id: recipe.id, recipe })),
+          ];
+          if (!cands.length) {
+            cands.push(...recipes.filter((r) => fitsRecipe(r, child.age, training)).map((recipe) => ({ id: recipe.id, recipe })));
+          }
+          let pick: Cand | undefined;
+          if (snack === 1 && common && cands.some((c) => c.id === common!.id)) pick = common;
+          else {
+            let fresh = cands.filter((c) => !usedToday.has(c.id) && !yesterday.has(c.id));
+            if (!fresh.length) fresh = cands.filter((c) => !usedToday.has(c.id));
+            pick = fresh.length ? rand(fresh) : (cands.length ? rand(cands) : undefined);
+          }
+          if (pick) {
+            usedToday.add(pick.id); todayIds.push(pick.id);
+            next.push({ childId: child.id, day, snack, recipeId: pick.recipe?.id ?? null, lunchboxId: pick.box?.id ?? null, training });
+          }
         }
+        yesterdayByChild.set(child.id, new Set(todayIds));
       });
     }
     setPlan(next);
-  }, [pool, recipes, children, plan.length]);
+  }, [pool, recipePool, recipes, children, familyMode, plan.length, genCount]);
 
   const visibleChildren = selectedChild === "all" ? children : children.filter((c) => c.id === selectedChild);
   const shopping = useMemo(() => {
@@ -198,8 +232,14 @@ function Index() {
   }, [plan, recipes, lunchboxes, visibleChildren]);
 
   function regenerate() {
+    setGenCount((c) => c + 1);
     setPlan([]);
-    flash(picked.length ? "Plano gerado apenas com as lancheiras que escolheu." : "Plano ajustado às idades e aos dias de treino.");
+    flash(picked.length || pickedRecipes.length ? "Novo plano gerado apenas com as sugestões que escolheu." : "Novo plano ajustado às idades e aos dias de treino.");
+  }
+
+  function toggleRecipe(id: string) {
+    setPickedRecipes((old) => (old.includes(id) ? old.filter((x) => x !== id) : [...old, id]));
+    setPlan([]);
   }
 
   async function togglePick(id: string) {
@@ -306,7 +346,7 @@ function Index() {
         {notice && <div className="fixed right-5 top-20 z-50 max-w-xs rounded-md bg-foreground px-4 py-3 text-sm text-background shadow-xl">{notice}</div>}
         {tab === "plano" && <PlanView children={visibleChildren} allChildren={children} recipes={recipes} lunchboxes={lunchboxes} picked={picked} plan={plan} familyMode={familyMode} selectedChild={selectedChild} setSelectedChild={setSelectedChild} setFamilyMode={setFamilyMode} period={period} setPeriod={setPeriod} regenerate={regenerate} savePlan={savePlan} openLunchboxes={() => setTab("lancheiras")} />}
         {tab === "lancheiras" && <LunchboxesView lunchboxes={lunchboxes} picked={picked} toggle={togglePick} images={images} setImage={(id,url)=>setImage("lunchboxes",id,url)} openImport={() => setModal("import")} clear={() => { setPicked([]); setPlan([]); if (sessionId) supabase.from("lunchbox_selections").delete().eq("user_id", sessionId); }} />}
-        {tab === "receitas" && <RecipesView recipes={recipes} search={search} setSearch={setSearch} images={images} setImage={(id,url)=>setImage("recipes",id,url)} openAdd={() => setModal("recipe")} openImport={() => setModal("import")} />}
+        {tab === "receitas" && <RecipesView recipes={recipes} search={search} setSearch={setSearch} images={images} setImage={(id,url)=>setImage("recipes",id,url)} openAdd={() => setModal("recipe")} openImport={() => setModal("import")} picked={pickedRecipes} toggle={toggleRecipe} />}
         {tab === "compras" && <ShoppingView items={shopping} childName={selectedChild === "all" ? "toda a família" : visibleChildren[0]?.name ?? "plano"} />}
         {tab === "familia" && <FamilyView children={children} images={images} setPhoto={(id,url)=>setImage("children",id,url)} openAdd={() => { setEditingChild(null); setModal("child"); }} openEdit={(child)=>{ setEditingChild(child); setModal("child"); }} remove={removeChild} />}
       </main>
@@ -325,7 +365,7 @@ function PageHeading({ eyebrow, title, text, action }: { eyebrow: string; title:
 }
 
 function PlanView({ children, allChildren, recipes, lunchboxes, picked, plan, familyMode, selectedChild, setSelectedChild, setFamilyMode, period, setPeriod, regenerate, savePlan, openLunchboxes }: { children: Child[]; allChildren: Child[]; recipes: Recipe[]; lunchboxes: Lunchbox[]; picked: string[]; plan: PlanCell[]; familyMode: boolean; selectedChild: string; setSelectedChild:(v:string)=>void; setFamilyMode:(v:boolean)=>void; period:"week"|"month"; setPeriod:(v:"week"|"month")=>void; regenerate:()=>void; savePlan:()=>void; openLunchboxes:()=>void }) {
-  return <section><PageHeading eyebrow={period === "week" ? "Semana de 14 a 18 de setembro" : "Setembro de 2026 · 4 semanas"} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana" : "Um mês"} equilibrado, adaptado a cada idade e aos dias com mais energia.`} action={<div className="flex gap-2"><Button variant="outline" onClick={savePlan}><Check size={17}/>Guardar</Button><Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button></div>}/>
+  return <section><PageHeading eyebrow={period === "week" ? "Semana de 14 a 18 de setembro" : "Setembro de 2026 · 4 semanas"} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana equilibrada" : "Um mês equilibrado"}, adaptado a cada idade e aos dias com mais energia.`} action={<div className="flex gap-2"><Button variant="outline" onClick={savePlan}><Check size={17}/>Guardar</Button><Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button></div>}/>
     <div className="mb-6 flex flex-wrap items-center gap-3">
       <div className="inline-flex rounded-md border border-border bg-card p-1"><Button size="sm" variant={period === "week" ? "secondary":"ghost"} onClick={()=>setPeriod("week")}>Semana</Button><Button size="sm" variant={period === "month" ? "secondary":"ghost"} onClick={()=>setPeriod("month")}>Mês</Button></div>
       <div className="inline-flex rounded-md border border-border bg-card p-1"><Button size="sm" variant={familyMode ? "secondary":"ghost"} onClick={()=>{setFamilyMode(true);setSelectedChild("all")}}>Agregado</Button><Button size="sm" variant={!familyMode ? "secondary":"ghost"} onClick={()=>{setFamilyMode(false);setSelectedChild(allChildren[0]?.id ?? "all")}}>Por filho</Button></div>
@@ -344,11 +384,20 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, plan, fa
 
 function LunchboxesView({ lunchboxes, picked, toggle, images, setImage, openImport, clear }: { lunchboxes: Lunchbox[]; picked: string[]; toggle:(id:string)=>void; images: Record<string,string>; setImage:(id:string,url:string)=>void; openImport:()=>void; clear:()=>void }) {
   const [filter, setFilter] = useState<"todas" | "sem-receita" | "treino" | "escolhidas">("todas");
-  const shown = lunchboxes.filter((b) => filter === "todas" || (filter === "sem-receita" ? itemsOf(b).every((i) => i.kind === "bought") : filter === "treino" ? b.training_suitable : picked.includes(b.id)));
+  const [q, setQ] = useState("");
+  const shown = lunchboxes.filter((b) => {
+    if (filter !== "todas" && !(filter === "sem-receita" ? itemsOf(b).every((i) => i.kind === "bought") : filter === "treino" ? b.training_suitable : picked.includes(b.id))) return false;
+    if (!q.trim()) return true;
+    const hay = [b.name, b.description, ...itemsOf(b).map((i) => i.label), ...ingredientsOf(b.ingredients).map((i) => i.name)].join(" ").toLowerCase();
+    return q.trim().toLowerCase().split(/\s+/).every((word) => hay.includes(word));
+  });
   return <section>
     <PageHeading eyebrow={`${lunchboxes.length} sugestões · ${picked.length} escolhidas`} title="Lancheiras completas" text="Sugestões prontas de lanche completo, com ou sem receita. Escolha as que quer no plano semanal." action={<div className="flex gap-2">{picked.length>0&&<Button variant="ghost" onClick={clear}>Limpar escolhas</Button>}<Button variant="outline" onClick={openImport}><FileUp size={17}/>Importar documento</Button></div>}/>
-    <div className="mb-6 inline-flex flex-wrap gap-1 rounded-md border border-border bg-card p-1">
-      {([["todas","Todas"],["sem-receita","Sem preparação"],["treino","Dias de treino"],["escolhidas","Escolhidas"]] as const).map(([id,label])=><Button key={id} size="sm" variant={filter===id?"secondary":"ghost"} onClick={()=>setFilter(id)}>{label}</Button>)}
+    <div className="mb-6 flex flex-wrap items-center gap-3">
+      <div className="relative max-w-md flex-1"><Search className="absolute left-3 top-3 text-muted-foreground" size={18}/><input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Pesquisar por nome ou ingrediente…" className="h-11 w-full rounded-md border border-input bg-card pl-10 pr-4"/></div>
+      <div className="inline-flex flex-wrap gap-1 rounded-md border border-border bg-card p-1">
+        {([["todas","Todas"],["sem-receita","Sem preparação"],["treino","Dias de treino"],["escolhidas","Escolhidas"]] as const).map(([id,label])=><Button key={id} size="sm" variant={filter===id?"secondary":"ghost"} onClick={()=>setFilter(id)}>{label}</Button>)}
+      </div>
     </div>
     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{shown.map((b,i)=>{const active=picked.includes(b.id);const items=itemsOf(b);const thumb=images[b.id]||[lunchbox.url,fruitBoxes.url,muffins.url][i%3];return <article key={b.id} className={`rounded-md border bg-card p-5 ${active?"border-primary ring-2 ring-primary/30":"border-border"}`}>
       <div className="mb-3 flex items-start gap-3">
@@ -404,9 +453,34 @@ function ImportForm({ save, signedIn, askLogin }: { save:(result:ImportResult)=>
   </div>;
 }
 
-function RecipesView({ recipes, search, setSearch, images, setImage, openAdd, openImport }: { recipes: Recipe[]; search:string; setSearch:(v:string)=>void; images: Record<string,string>; setImage:(id:string,url:string)=>void; openAdd:()=>void; openImport:()=>void }) {
-  const fallbacks=[muffins.url,lunchbox.url,fruitBoxes.url]; const shown=recipes.filter((r)=>r.name.toLowerCase().includes(search.toLowerCase()));
-  return <section><PageHeading eyebrow={`${recipes.length} receitas na coleção`} title="Receitas para dias reais" text="Opções práticas, completas e pensadas para preparar sem complicar." action={<div className="flex gap-2"><Button variant="outline" onClick={openImport}><FileUp size={17}/>Importar</Button><Button onClick={openAdd}><Plus size={17}/>Adicionar receita</Button></div>}/><div className="relative mb-7 max-w-md"><Search className="absolute left-3 top-3 text-muted-foreground" size={18}/><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Pesquisar receitas…" className="h-11 w-full rounded-md border border-input bg-card pl-10 pr-4"/></div><div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{shown.map((r,i)=><article key={r.id} className="overflow-hidden rounded-md border border-border bg-card"><div className="relative"><img src={images[r.id]||r.image_url||fallbacks[i%3]} alt={r.name} className="aspect-[4/3] w-full object-cover" loading="lazy"/><ImagePicker label="Alterar imagem" className="absolute bottom-3 right-3" onPick={(url)=>setImage(r.id,url)}/></div><div className="p-5"><div className="mb-3 flex gap-2">{r.freezable&&<span className="rounded-full bg-leaf-soft px-2 py-1 text-xs font-bold text-primary"><Snowflake size={12} className="mr-1 inline"/>Congela</span>}{r.training_suitable&&<span className="rounded-full bg-accent px-2 py-1 text-xs font-bold text-accent-foreground"><Dumbbell size={12} className="mr-1 inline"/>Treino</span>}</div><h2 className="text-2xl">{r.name}</h2><p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{r.description}</p><div className="mt-4 flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground"><span><Clock3 size={14} className="mr-1 inline"/>{r.prep_minutes+r.cook_minutes} min</span><span>{r.min_age}–{r.max_age} anos</span><span>{r.portions} porções</span></div></div></article>)}</div></section>;
+function RecipesView({ recipes, search, setSearch, images, setImage, openAdd, openImport, picked, toggle }: { recipes: Recipe[]; search:string; setSearch:(v:string)=>void; images: Record<string,string>; setImage:(id:string,url:string)=>void; openAdd:()=>void; openImport:()=>void; picked:string[]; toggle:(id:string)=>void }) {
+  const fallbacks=[muffins.url,lunchbox.url,fruitBoxes.url];
+  const [sort,setSort]=useState<"nome"|"tempo"|"idade">("nome");
+  const [openId,setOpenId]=useState<string|null>(null);
+  const shown=recipes.filter((r)=>{
+    if (!search.trim()) return true;
+    const hay=[r.name,r.description,...ingredientsOf(r.ingredients).map((i)=>i.name)].join(" ").toLowerCase();
+    return search.trim().toLowerCase().split(/\s+/).every((word)=>hay.includes(word));
+  }).sort((a,b)=>sort==="tempo"?(a.prep_minutes+a.cook_minutes)-(b.prep_minutes+b.cook_minutes):sort==="idade"?a.min_age-b.min_age:a.name.localeCompare(b.name,"pt"));
+  const open=shown.find((r)=>r.id===openId)||null;
+  return <section><PageHeading eyebrow={`${recipes.length} receitas na coleção`} title="Receitas para dias reais" text="Toque numa receita para ver ingredientes, quantidades e preparação." action={<div className="flex gap-2"><Button variant="outline" onClick={openImport}><FileUp size={17}/>Importar</Button><Button onClick={openAdd}><Plus size={17}/>Adicionar receita</Button></div>}/>
+    <div className="mb-6 flex flex-wrap items-center gap-3"><div className="relative max-w-md flex-1"><Search className="absolute left-3 top-3 text-muted-foreground" size={18}/><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Pesquisar por nome ou ingrediente…" className="h-11 w-full rounded-md border border-input bg-card pl-10 pr-4"/></div><label className="flex items-center gap-2 text-sm text-muted-foreground"><ArrowUpDown size={15}/><select value={sort} onChange={(e)=>setSort(e.target.value as typeof sort)} className="h-11 rounded-md border border-input bg-card px-3 text-sm text-foreground"><option value="nome">Nome A–Z</option><option value="tempo">Mais rápidas</option><option value="idade">Idade</option></select></label></div>
+    <ol className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">{shown.map((r,i)=>{const active=picked.includes(r.id);return <li key={r.id} className="flex items-center"><button type="button" onClick={()=>setOpenId(r.id)} className="flex min-w-0 flex-1 items-center gap-4 p-3 text-left transition-colors hover:bg-muted/60">
+      <img src={images[r.id]||r.image_url||fallbacks[i%3]} alt="" className="size-14 shrink-0 rounded-md object-cover" loading="lazy"/>
+      <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h2 className="truncate text-base font-bold">{r.name}</h2>{r.freezable&&<Snowflake size={13} className="shrink-0 text-primary"/>}{r.training_suitable&&<Dumbbell size={13} className="shrink-0 text-accent-foreground"/>}</div><p className="truncate text-sm text-muted-foreground">{r.description}</p></div>
+      <div className="hidden shrink-0 items-center gap-4 text-xs text-muted-foreground sm:flex"><span><Clock3 size={13} className="mr-1 inline"/>{r.prep_minutes+r.cook_minutes} min</span><span>{r.min_age}–{r.max_age} anos</span><span>{r.portions} porções</span></div>
+      <ChevronRight size={17} className="shrink-0 text-muted-foreground"/></button>
+      <button type="button" onClick={()=>toggle(r.id)} aria-pressed={active} aria-label={active?`Retirar ${r.name} do plano`:`Usar ${r.name} no plano`} title={active?"Retirar do plano":"Adicionar ao plano"} className={`mr-3 grid size-8 shrink-0 place-items-center rounded-full border ${active?"border-primary bg-primary text-primary-foreground":"border-border text-muted-foreground"}`}>{active?<Check size={16}/>:<Plus size={16}/>}</button></li>})}</ol>
+    {picked.length>0&&<p className="mt-3 text-xs text-muted-foreground">{picked.length} {picked.length===1?"receita escolhida":"receitas escolhidas"} para entrar no plano semanal.</p>}
+    {open&&<Modal title={open.name} close={()=>setOpenId(null)}><div className="relative mb-5"><img src={images[open.id]||open.image_url||fallbacks[shown.indexOf(open)%3]} alt={open.name} className="max-h-48 w-full rounded-md object-cover"/><ImagePicker label="Alterar imagem" className="absolute bottom-3 right-3" onPick={(url)=>setImage(open.id,url)}/></div>
+      <p className="mb-4 text-sm text-muted-foreground">{open.description}</p>
+      <div className="mb-5 flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-muted px-2 py-1 font-bold"><Clock3 size={12} className="mr-1 inline"/>{open.prep_minutes+open.cook_minutes} min</span><span className="rounded-full bg-muted px-2 py-1 font-bold">{open.min_age}–{open.max_age} anos</span><span className="rounded-full bg-muted px-2 py-1 font-bold">{open.portions} porções</span>{open.freezable&&<span className="rounded-full bg-leaf-soft px-2 py-1 font-bold text-primary"><Snowflake size={12} className="mr-1 inline"/>Congela</span>}{open.training_suitable&&<span className="rounded-full bg-accent px-2 py-1 font-bold text-accent-foreground"><Dumbbell size={12} className="mr-1 inline"/>Treino</span>}</div>
+      <h3 className="mb-2 text-sm font-extrabold uppercase tracking-wide text-muted-foreground">Ingredientes</h3>
+      <ul className="mb-5 space-y-1 text-sm">{ingredientsOf(open.ingredients).map((ing,i)=><li key={i} className="flex justify-between gap-4 border-b border-border pb-1"><span>{ing.name}</span><span className="shrink-0 text-muted-foreground">{ing.quantity} {ing.unit}</span></li>)}</ul>
+      {open.instructions.length>0&&<><h3 className="mb-2 text-sm font-extrabold uppercase tracking-wide text-muted-foreground">Preparação</h3><ol className="list-decimal space-y-2 pl-5 text-sm">{open.instructions.map((step,i)=><li key={i}>{step}</li>)}</ol></>}
+      <Button className="mt-6 w-full" variant={picked.includes(open.id)?"secondary":"default"} onClick={()=>toggle(open.id)}>{picked.includes(open.id)?<><Check size={17}/>No plano semanal — retirar</>:<><Plus size={17}/>Adicionar ao plano semanal</>}</Button>
+    </Modal>}
+  </section>;
 }
 
 

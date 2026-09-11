@@ -74,9 +74,9 @@ function ImagePicker({ label, onPick, className = "" }: { label: string; onPick:
 }
 
 function ViewToggle({ view, setView }: { view: "cards" | "lista"; setView: (v: "cards" | "lista") => void }) {
-  return <div className="inline-flex h-10 items-center rounded-md border border-border bg-card p-1">
-    <Button size="default" variant={view === "cards" ? "secondary" : "ghost"} onClick={() => setView("cards")} aria-pressed={view === "cards"}><LayoutGrid size={15}/>Cartões</Button>
-    <Button size="default" variant={view === "lista" ? "secondary" : "ghost"} onClick={() => setView("lista")} aria-pressed={view === "lista"}><List size={15}/>Lista</Button>
+  return <div className="flex items-center justify-center gap-1 rounded-md border border-border bg-card p-1">
+    <Button size="sm" variant={view === "cards" ? "secondary" : "ghost"} onClick={() => setView("cards")} aria-pressed={view === "cards"}><LayoutGrid size={15}/>Cartões</Button>
+    <Button size="sm" variant={view === "lista" ? "secondary" : "ghost"} onClick={() => setView("lista")} aria-pressed={view === "lista"}><List size={15}/>Lista</Button>
   </div>;
 }
 

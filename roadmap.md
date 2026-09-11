@@ -19,3 +19,7 @@
 - [x] Cards do plano com altura estática e nome em até 3 linhas
 - [x] Juntar botões Exportar/Imprimir/WhatsApp/Guardar/Gerar num menu único
 - [x] Alinhar altura do campo de pesquisa com os botões de filtro em Lancheiras/Receitas
+
+## Novo
+- [ ] Imprimir/PDF e imagem com a tabela completa (todas as semanas)
+- [ ] Editar/trocar um lanche do plano e limpar o plano

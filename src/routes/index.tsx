@@ -369,23 +369,35 @@ function Index() {
   async function savePlan() {
     if (!sessionId) { setModal("auth"); return; }
     const chosenChild = selectedChild === "all" ? null : selectedChild;
+    const start = weekStartIso ? parseIso(weekStartIso) : mondayOf();
+    const { data: old } = await supabase.from("meal_plans").select("id").eq("user_id", sessionId);
+    if (old?.length) {
+      const ids = old.map((row) => row.id);
+      await supabase.from("plan_items").delete().in("plan_id", ids);
+      await supabase.from("meal_plans").delete().in("id", ids);
+    }
     const { data: saved, error } = await supabase.from("meal_plans").insert({
       user_id: sessionId,
       title: period === "week" ? "Plano semanal" : "Plano mensal",
       period_type: period,
       plan_mode: chosenChild ? "child" : "family",
       child_id: chosenChild,
-      starts_on: "2026-09-14",
+      starts_on: isoDate(start),
     }).select().single();
     if (error || !saved) { flash("Não foi possível guardar o plano."); return; }
-    const baseDate = new Date("2026-09-14T12:00:00");
-    const rows = plan.map((item) => {
-      const date = new Date(baseDate); date.setDate(date.getDate() + item.day);
-      return { plan_id: saved.id, child_id: item.childId, recipe_id: item.recipeId, lunchbox_id: item.lunchboxId, snack_date: date.toISOString().slice(0,10), snack_number: item.snack, training_boost: item.training };
-    });
+    const rows = plan.map((item) => ({
+      plan_id: saved.id,
+      child_id: item.childId,
+      recipe_id: item.recipeId,
+      lunchbox_id: item.lunchboxId,
+      snack_date: isoDate(dateOfPlanDay(start, item.day)),
+      snack_number: item.snack,
+      training_boost: item.training,
+    }));
     const { error: itemError } = await supabase.from("plan_items").insert(rows);
-    flash(itemError ? "O plano foi criado, mas faltaram alguns lanches." : "Plano guardado com sucesso.");
+    flash(itemError ? "O plano foi criado, mas faltaram alguns lanches." : "Plano guardado — volta a aparecer quando abrir a app.");
   }
+
 
   async function saveImport(result: ImportResult) {
     if (!sessionId) { setModal("auth"); return; }

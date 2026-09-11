@@ -79,6 +79,7 @@ function Index() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [lunchboxes, setLunchboxes] = useState<Lunchbox[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
+  const [pickedRecipes, setPickedRecipes] = useState<string[]>([]);
   const [plan, setPlan] = useState<PlanCell[]>([]);
   const [familyMode, setFamilyMode] = useState(true);
   const [period, setPeriod] = useState<"week" | "month">("week");
@@ -153,18 +154,25 @@ function Index() {
     return chosen.length ? chosen : lunchboxes;
   }, [lunchboxes, picked]);
 
+  const recipePool = useMemo(() => recipes.filter((r) => pickedRecipes.includes(r.id)), [recipes, pickedRecipes]);
+
   useEffect(() => {
     if ((!pool.length && !recipes.length) || plan.length) return;
+    type Cand = { id: string; box?: Lunchbox; recipe?: Recipe };
     const next: PlanCell[] = [];
     const rand = <T,>(list: T[]) => list[Math.floor(Math.random() * list.length)];
     const fits = (box: Lunchbox, age: number, training: boolean) => box.min_age <= age && box.max_age >= age && (!training || box.training_suitable);
+    const fitsRecipe = (r: Recipe, age: number, training: boolean) => r.min_age <= age && r.max_age >= age && (!training || r.training_suitable);
     const usedCommon = new Set<string>();
     const yesterdayByChild = new Map<string, Set<string>>();
     for (let day = 0; day < 5; day++) {
-      let common: Lunchbox | undefined;
+      let common: Cand | undefined;
       if (familyMode && children.length > 1) {
-        const cands = pool.filter((b) => children.every((c) => fits(b, c.age, c.training_days.includes(day))));
-        let fresh = cands.filter((b) => !usedCommon.has(b.id));
+        const cands: Cand[] = [
+          ...pool.filter((b) => children.every((c) => fits(b, c.age, c.training_days.includes(day)))).map((box) => ({ id: box.id, box })),
+          ...recipePool.filter((r) => children.every((c) => fitsRecipe(r, c.age, c.training_days.includes(day)))).map((recipe) => ({ id: recipe.id, recipe })),
+        ];
+        let fresh = cands.filter((c) => !usedCommon.has(c.id));
         if (!fresh.length) { usedCommon.clear(); fresh = cands; }
         common = fresh.length ? rand(fresh) : undefined;
         if (common) usedCommon.add(common.id);
@@ -175,30 +183,30 @@ function Index() {
         const todayIds: string[] = [];
         for (let snack = 1; snack <= child.snacks_per_day; snack++) {
           const training = child.training_days.includes(day);
-          const suitable = pool.filter((b) => fits(b, child.age, training));
-          let box: Lunchbox | undefined;
-          if (snack === 1 && common && fits(common, child.age, training)) box = common;
+          const cands: Cand[] = [
+            ...pool.filter((b) => fits(b, child.age, training)).map((box) => ({ id: box.id, box })),
+            ...recipePool.filter((r) => fitsRecipe(r, child.age, training)).map((recipe) => ({ id: recipe.id, recipe })),
+          ];
+          if (!cands.length) {
+            cands.push(...recipes.filter((r) => fitsRecipe(r, child.age, training)).map((recipe) => ({ id: recipe.id, recipe })));
+          }
+          let pick: Cand | undefined;
+          if (snack === 1 && common && cands.some((c) => c.id === common!.id)) pick = common;
           else {
-            let fresh = suitable.filter((b) => !usedToday.has(b.id) && !yesterday.has(b.id));
-            if (!fresh.length) fresh = suitable.filter((b) => !usedToday.has(b.id));
-            box = fresh.length ? rand(fresh) : (suitable.length ? rand(suitable) : undefined);
+            let fresh = cands.filter((c) => !usedToday.has(c.id) && !yesterday.has(c.id));
+            if (!fresh.length) fresh = cands.filter((c) => !usedToday.has(c.id));
+            pick = fresh.length ? rand(fresh) : (cands.length ? rand(cands) : undefined);
           }
-          if (box) {
-            usedToday.add(box.id); todayIds.push(box.id);
-            next.push({ childId: child.id, day, snack, recipeId: null, lunchboxId: box.id, training });
-            continue;
+          if (pick) {
+            usedToday.add(pick.id); todayIds.push(pick.id);
+            next.push({ childId: child.id, day, snack, recipeId: pick.recipe?.id ?? null, lunchboxId: pick.box?.id ?? null, training });
           }
-          const okRecipes = recipes.filter((r) => r.min_age <= child.age && r.max_age >= child.age && (!training || r.training_suitable));
-          let freshR = okRecipes.filter((r) => !usedToday.has(r.id) && !yesterday.has(r.id));
-          if (!freshR.length) freshR = okRecipes.filter((r) => !usedToday.has(r.id));
-          const recipe = freshR.length ? rand(freshR) : (okRecipes.length ? rand(okRecipes) : recipes[0]);
-          if (recipe) { usedToday.add(recipe.id); todayIds.push(recipe.id); next.push({ childId: child.id, day, snack, recipeId: recipe.id, lunchboxId: null, training }); }
         }
         yesterdayByChild.set(child.id, new Set(todayIds));
       });
     }
     setPlan(next);
-  }, [pool, recipes, children, familyMode, plan.length, genCount]);
+  }, [pool, recipePool, recipes, children, familyMode, plan.length, genCount]);
 
   const visibleChildren = selectedChild === "all" ? children : children.filter((c) => c.id === selectedChild);
   const shopping = useMemo(() => {

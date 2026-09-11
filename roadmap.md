@@ -11,3 +11,4 @@
 - [ ] Alterar imagem: escolher ficheiro ou tirar foto com a câmara
 - [ ] Nomes "Lancheira 1/2/3" devem usar a descrição em vez do número
 - [ ] Plano em mobile sem scroll lateral (cartões por dia)
+- [ ] Imprimir/exportar o plano (tabela) no computador

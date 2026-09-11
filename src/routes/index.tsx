@@ -489,7 +489,7 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
               <span className="text-[10px] font-extrabold uppercase tracking-wide text-primary">Lanche {cell.snack}</span>
               {cell.training && <Dumbbell size={13} className="shrink-0 text-berry" />}
             </span>
-            <span className="block truncate font-bold leading-tight">{name}</span>
+            <span className="block text-sm font-bold leading-tight">{name}</span>
           </button>
         );
       };

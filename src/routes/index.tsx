@@ -34,23 +34,85 @@ async function fileToSmallImage(file: File): Promise<string> {
 }
 
 function ImagePicker({ label, onPick, className = "" }: { label: string; onPick: (dataUrl: string) => void; className?: string }) {
-  return (
-    <label className={`cursor-pointer rounded-full bg-background/90 px-3 py-1 text-xs font-bold text-foreground shadow ${className}`}>
-      <ImageIcon size={12} className="mr-1 inline" />
-      {label}
+  const [open, setOpen] = useState(false);
+  const input = (capture: boolean, text: string, Icon: typeof ImageIcon) => (
+    <label className="flex cursor-pointer items-center gap-2 px-3 py-2 text-xs font-bold hover:bg-muted">
+      <Icon size={13} />
+      {text}
       <input
         type="file"
         accept="image/*"
+        {...(capture ? { capture: "environment" as const } : {})}
         className="hidden"
         onChange={async (e) => {
           const file = e.target.files?.[0];
+          e.currentTarget.value = "";
+          setOpen(false);
           if (file) onPick(await fileToSmallImage(file));
-          e.target.value = "";
         }}
       />
     </label>
   );
+  return (
+    <div className={`relative ${className}`}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="flex w-full items-center justify-center gap-1 rounded-full bg-background/90 px-3 py-1 text-xs font-bold text-foreground shadow"
+      >
+        <ImageIcon size={12} />
+        {label}
+      </button>
+      {open && (
+        <div className="absolute bottom-full right-0 z-50 mb-1 w-44 overflow-hidden rounded-md border border-border bg-background py-1 text-left shadow-xl" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+          {input(false, "Escolher imagem", ImageIcon)}
+          {input(true, "Tirar fotografia", Camera)}
+        </div>
+      )}
+    </div>
+  );
 }
+
+function ViewToggle({ view, setView }: { view: "cards" | "lista"; setView: (v: "cards" | "lista") => void }) {
+  return <div className="inline-flex rounded-md border border-border bg-card p-1">
+    <Button size="sm" variant={view === "cards" ? "secondary" : "ghost"} onClick={() => setView("cards")} aria-pressed={view === "cards"}><LayoutGrid size={15}/>Cartões</Button>
+    <Button size="sm" variant={view === "lista" ? "secondary" : "ghost"} onClick={() => setView("lista")} aria-pressed={view === "lista"}><List size={15}/>Lista</Button>
+  </div>;
+}
+
+function useView(key: string) {
+  const [view, setView] = useState<"cards" | "lista">("cards");
+  useEffect(() => {
+    const stored = localStorage.getItem(key);
+    if (stored === "cards" || stored === "lista") setView(stored);
+  }, [key]);
+  return [view, (v: "cards" | "lista") => { setView(v); localStorage.setItem(key, v); }] as const;
+}
+
+function LunchboxDetail({ box, image, setImage, picked, toggle, close }: { box: Lunchbox; image: string; setImage:(url:string)=>void; picked:boolean; toggle:()=>void; close:()=>void }) {
+  return <Modal title={box.name} close={close}>
+    <div className="relative mb-5"><img src={image} alt={box.name} className="max-h-48 w-full rounded-md object-cover"/><ImagePicker label="Alterar imagem" className="absolute bottom-3 right-3 w-40" onPick={setImage}/></div>
+    <p className="mb-4 text-sm text-muted-foreground">{box.description}</p>
+    <div className="mb-5 flex flex-wrap gap-2 text-xs">{box.components.map((c)=><span key={c} className="rounded-full bg-muted px-2 py-1 font-bold">{c}</span>)}<span className="rounded-full bg-muted px-2 py-1 font-bold">{box.min_age}–{box.max_age} anos</span>{box.training_suitable&&<span className="rounded-full bg-accent px-2 py-1 font-bold text-accent-foreground"><Dumbbell size={12} className="mr-1 inline"/>Treino</span>}{!box.needs_prep&&<span className="rounded-full bg-leaf-soft px-2 py-1 font-bold text-primary">Sem preparação</span>}</div>
+    <h3 className="mb-2 text-sm font-extrabold uppercase tracking-wide text-muted-foreground">O que vai na lancheira</h3>
+    <ul className="mb-5 space-y-1 text-sm">{itemsOf(box).map((i)=><li key={i.label} className="flex items-center gap-2"><span className={`size-1.5 rounded-full ${i.kind==="recipe"?"bg-primary":"bg-accent"}`}/>{i.label}<span className="text-xs text-muted-foreground">{i.kind==="recipe"?"receita":"comprado"}</span></li>)}</ul>
+    {ingredientsOf(box.ingredients).length>0&&<><h3 className="mb-2 text-sm font-extrabold uppercase tracking-wide text-muted-foreground">Para comprar</h3><ul className="mb-5 space-y-1 text-sm">{ingredientsOf(box.ingredients).map((ing,i)=><li key={i} className="flex justify-between gap-4 border-b border-border pb-1"><span>{ing.name}</span><span className="shrink-0 text-muted-foreground">{ing.quantity} {ing.unit}</span></li>)}</ul></>}
+    <Button className="w-full" variant={picked?"secondary":"default"} onClick={toggle}>{picked?<><Check size={17}/>No plano semanal — retirar</>:<><Plus size={17}/>Adicionar ao plano semanal</>}</Button>
+  </Modal>;
+}
+
+function RecipeDetail({ recipe, image, setImage, picked, toggle, close }: { recipe: Recipe; image: string; setImage:(url:string)=>void; picked:boolean; toggle:()=>void; close:()=>void }) {
+  return <Modal title={recipe.name} close={close}>
+    <div className="relative mb-5"><img src={image} alt={recipe.name} className="max-h-48 w-full rounded-md object-cover"/><ImagePicker label="Alterar imagem" className="absolute bottom-3 right-3 w-40" onPick={setImage}/></div>
+    <p className="mb-4 text-sm text-muted-foreground">{recipe.description}</p>
+    <div className="mb-5 flex flex-wrap gap-2 text-xs"><span className="rounded-full bg-muted px-2 py-1 font-bold"><Clock3 size={12} className="mr-1 inline"/>{recipe.prep_minutes+recipe.cook_minutes} min</span><span className="rounded-full bg-muted px-2 py-1 font-bold">{recipe.min_age}–{recipe.max_age} anos</span><span className="rounded-full bg-muted px-2 py-1 font-bold">{recipe.portions} porções</span>{recipe.freezable&&<span className="rounded-full bg-leaf-soft px-2 py-1 font-bold text-primary"><Snowflake size={12} className="mr-1 inline"/>Congela</span>}{recipe.training_suitable&&<span className="rounded-full bg-accent px-2 py-1 font-bold text-accent-foreground"><Dumbbell size={12} className="mr-1 inline"/>Treino</span>}</div>
+    <h3 className="mb-2 text-sm font-extrabold uppercase tracking-wide text-muted-foreground">Ingredientes</h3>
+    <ul className="mb-5 space-y-1 text-sm">{ingredientsOf(recipe.ingredients).map((ing,i)=><li key={i} className="flex justify-between gap-4 border-b border-border pb-1"><span>{ing.name}</span><span className="shrink-0 text-muted-foreground">{ing.quantity} {ing.unit}</span></li>)}</ul>
+    {recipe.instructions.length>0&&<><h3 className="mb-2 text-sm font-extrabold uppercase tracking-wide text-muted-foreground">Preparação</h3><ol className="list-decimal space-y-2 pl-5 text-sm">{recipe.instructions.map((step,i)=><li key={i}>{step}</li>)}</ol></>}
+    <Button className="mt-6 w-full" variant={picked?"secondary":"default"} onClick={toggle}>{picked?<><Check size={17}/>No plano semanal — retirar</>:<><Plus size={17}/>Adicionar ao plano semanal</>}</Button>
+  </Modal>;
+}
+
 
 
 const demoChildren: Child[] = [

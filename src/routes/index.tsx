@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Apple, ArrowUpDown, Pencil, CalendarDays, Camera, Check, ChevronRight, Clock3, Dumbbell, FileUp, Image as ImageIcon, LayoutGrid, List, LogIn, MessageCircle, Plus, Sandwich, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
+import { Apple, ArrowUpDown, CalendarDays, Camera, Check, ChevronRight, Clock3, Dumbbell, FileUp, Image as ImageIcon, LayoutGrid, List, LogIn, MessageCircle, Plus, Sandwich, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ type Recipe = Tables<"recipes">;
 type Lunchbox = Tables<"lunchboxes">;
 type LunchItem = { label: string; kind: "recipe" | "bought" };
 type Ingredient = { name: string; quantity: number; unit: string };
-type PlanCell = { childId: string; day: number; snack: number; recipeId: string | null; lunchboxId: string | null; training: boolean };
+type PlanCell = { childId: string; day: number; snack: number; recipeId: string | null; lunchboxId: string | null; training: boolean; label?: string };
 
 const itemsOf = (box: Lunchbox) => (Array.isArray(box.items) ? (box.items as LunchItem[]) : []);
 const ingredientsOf = (value: unknown) => (Array.isArray(value) ? (value as Ingredient[]) : []);
@@ -361,6 +361,13 @@ function Index() {
     flash("Lanche alterado.");
   }
 
+  function renameCell(target: { childId: string; day: number; snack: number }, label: string) {
+    setPlan((old) => old.map((c) => (c.childId === target.childId && c.day === target.day && c.snack === target.snack
+      ? { ...c, label: label.trim() || undefined }
+      : c)));
+    flash("Texto do lanche atualizado.");
+  }
+
   function removeCell(target: { childId: string; day: number; snack: number }) {
     setPlan((old) => old.filter((c) => !(c.childId === target.childId && c.day === target.day && c.snack === target.snack)));
     flash("Lanche retirado do plano.");
@@ -498,7 +505,7 @@ function Index() {
           <p className="flex-1"><b>Está a experimentar sem conta.</b> Os perfis, as escolhas e o plano são apenas de demonstração e desaparecem ao fechar o separador. Entre para guardar tudo.</p>
           <Button size="sm" onClick={goLogin} className="shrink-0"><LogIn size={16}/>Entrar e guardar</Button>
         </div>}
-        {tab === "plano" && <PlanView children={visibleChildren} allChildren={children} recipes={recipes} lunchboxes={lunchboxes} picked={picked} pickedRecipes={pickedRecipes} toggleBox={togglePick} toggleRecipe={toggleRecipe} images={images} setImage={setImage} plan={plan} familyMode={familyMode} selectedChild={selectedChild} setSelectedChild={setSelectedChild} setFamilyMode={setFamilyMode} period={period} setPeriod={(v)=>{ setPeriod(v); setPlan([]); }} weekStartIso={weekStartIso} regenerate={regenerate} savePlan={savePlan} replaceCell={replaceCell} removeCell={removeCell} clearPlan={clearPlan} openLunchboxes={() => setTab("lancheiras")} />}
+        {tab === "plano" && <PlanView children={visibleChildren} allChildren={children} recipes={recipes} lunchboxes={lunchboxes} picked={picked} pickedRecipes={pickedRecipes} toggleBox={togglePick} toggleRecipe={toggleRecipe} images={images} setImage={setImage} plan={plan} familyMode={familyMode} selectedChild={selectedChild} setSelectedChild={setSelectedChild} setFamilyMode={setFamilyMode} period={period} setPeriod={(v)=>{ setPeriod(v); setPlan([]); }} weekStartIso={weekStartIso} regenerate={regenerate} savePlan={savePlan} replaceCell={replaceCell} renameCell={renameCell} removeCell={removeCell} clearPlan={clearPlan} openLunchboxes={() => setTab("lancheiras")} />}
 
         {tab === "lancheiras" && <LunchboxesView lunchboxes={lunchboxes} recipes={recipes} picked={picked} pickedRecipes={pickedRecipes} toggle={togglePick} toggleRecipe={toggleRecipe} images={images} setImage={(id,url)=>setImage("lunchboxes",id,url)} setRecipeImage={(id,url)=>setImage("recipes",id,url)} openImport={() => setModal("import")} clear={() => { setPicked([]); setPlan([]); if (sessionId) supabase.from("lunchbox_selections").delete().eq("user_id", sessionId); }} />}
         {tab === "receitas" && <RecipesView recipes={recipes} search={search} setSearch={setSearch} images={images} setImage={(id,url)=>setImage("recipes",id,url)} openAdd={() => setModal("recipe")} openImport={() => setModal("import")} picked={pickedRecipes} toggle={toggleRecipe} />}
@@ -519,12 +526,13 @@ function PageHeading({ eyebrow, title, text, action }: { eyebrow: string; title:
   return <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-extrabold uppercase text-primary">{eyebrow}</p><h1 className="text-4xl sm:text-5xl">{title}</h1><p className="mt-2 max-w-2xl text-muted-foreground">{text}</p></div>{action}</div>;
 }
 
-function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRecipes, toggleBox, toggleRecipe, images, setImage, plan, familyMode, selectedChild, setSelectedChild, setFamilyMode, period, setPeriod, weekStartIso, regenerate, savePlan, replaceCell, removeCell, clearPlan, openLunchboxes }: { children: Child[]; allChildren: Child[]; recipes: Recipe[]; lunchboxes: Lunchbox[]; picked: string[]; pickedRecipes: string[]; toggleBox:(id:string)=>void; toggleRecipe:(id:string)=>void; images: Record<string,string>; setImage:(table:"recipes"|"lunchboxes"|"children",id:string,url:string)=>void; plan: PlanCell[]; familyMode: boolean; selectedChild: string; setSelectedChild:(v:string)=>void; setFamilyMode:(v:boolean)=>void; period:"week"|"month"; setPeriod:(v:"week"|"month")=>void; weekStartIso: string; regenerate:()=>void; savePlan:()=>void; replaceCell:(t:{childId:string;day:number;snack:number},p:{kind:"box"|"recipe";id:string})=>void; removeCell:(t:{childId:string;day:number;snack:number})=>void; clearPlan:()=>void; openLunchboxes:()=>void }) {
+function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRecipes, toggleBox, toggleRecipe, images, setImage, plan, familyMode, selectedChild, setSelectedChild, setFamilyMode, period, setPeriod, weekStartIso, regenerate, savePlan, replaceCell, renameCell, removeCell, clearPlan, openLunchboxes }: { children: Child[]; allChildren: Child[]; recipes: Recipe[]; lunchboxes: Lunchbox[]; picked: string[]; pickedRecipes: string[]; toggleBox:(id:string)=>void; toggleRecipe:(id:string)=>void; images: Record<string,string>; setImage:(table:"recipes"|"lunchboxes"|"children",id:string,url:string)=>void; plan: PlanCell[]; familyMode: boolean; selectedChild: string; setSelectedChild:(v:string)=>void; setFamilyMode:(v:boolean)=>void; period:"week"|"month"; setPeriod:(v:"week"|"month")=>void; weekStartIso: string; regenerate:()=>void; savePlan:()=>void; replaceCell:(t:{childId:string;day:number;snack:number},p:{kind:"box"|"recipe";id:string})=>void; renameCell:(t:{childId:string;day:number;snack:number},label:string)=>void; removeCell:(t:{childId:string;day:number;snack:number})=>void; clearPlan:()=>void; openLunchboxes:()=>void }) {
   const [open, setOpen] = useState<{ kind: "box" | "recipe"; id: string } | null>(null);
   const [day, setDay] = useState(0);
   const [weekIndex, setWeekIndex] = useState(0);
   const [actionsOpen, setActionsOpen] = useState(false);
-  const [swap, setSwap] = useState<{ childId: string; day: number; snack: number } | null>(null);
+  const [edit, setEdit] = useState<PlanCell | null>(null);
+  const [swapping, setSwapping] = useState(false);
   const [swapQuery, setSwapQuery] = useState("");
   const [busyImage, setBusyImage] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
@@ -541,7 +549,7 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
   const openRecipe = open?.kind === "recipe" ? recipes.find((r) => r.id === open.id) ?? null : null;
   const fallbacks = [lunchbox.url, fruitBoxes.url, muffins.url];
   const imageFor = (id: string, stored: string | null | undefined, i: number) => images[id] || stored || fallbacks[i % 3] || lunchbox.url;
-  const nameOf = (cell: PlanCell) => lunchboxes.find((x) => x.id === cell.lunchboxId)?.name ?? recipes.find((x) => x.id === cell.recipeId)?.name ?? "";
+  const nameOf = (cell: PlanCell) => cell.label ?? lunchboxes.find((x) => x.id === cell.lunchboxId)?.name ?? recipes.find((x) => x.id === cell.recipeId)?.name ?? "";
   const weeks = period === "month" ? 4 : 1;
   const start = weekStartIso ? parseIso(weekStartIso) : mondayOf();
   const dateAt = (weekday: number, w = weekIndex) => addDays(start, w * 7 + weekday);
@@ -650,27 +658,21 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
       const snackPill = (cell: PlanCell) => {
         const box = lunchboxes.find((x) => x.id === cell.lunchboxId);
         const r = recipes.find((x) => x.id === cell.recipeId);
-        const name = box?.name ?? r?.name ?? "A preparar…";
+        const name = cell.label ?? box?.name ?? r?.name ?? "A preparar…";
         const id = box?.id ?? r?.id;
         return (
-          <div key={cell.snack} className="group relative mb-2">
-            <button
-              type="button"
-              disabled={!id}
-              onClick={() => id && setOpen({ kind: box ? "box" : "recipe", id })}
-              className="flex h-[4.5rem] w-full flex-col justify-center rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/60 disabled:cursor-default"
-            >
-              <span className="mb-1 flex items-center gap-2">
-                <span className="text-[10px] font-extrabold uppercase tracking-wide text-primary">Lanche {cell.snack}</span>
-                {cell.training && <Dumbbell size={13} className="shrink-0 text-berry" />}
-              </span>
-              <span className="block pr-6 text-sm leading-tight line-clamp-3">{name}</span>
-            </button>
-            <span className="absolute right-1 top-1 flex gap-1 print:hidden">
-              <button type="button" aria-label="Trocar lanche" title="Trocar lanche" onClick={() => { setSwapQuery(""); setSwap({ childId: cell.childId, day: cell.day, snack: cell.snack }); }} className="grid size-6 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:border-primary hover:text-primary"><Pencil size={12}/></button>
-              <button type="button" aria-label="Retirar lanche" title="Retirar do plano" onClick={() => removeCell({ childId: cell.childId, day: cell.day, snack: cell.snack })} className="grid size-6 place-items-center rounded-md border border-border bg-background text-muted-foreground hover:border-berry hover:text-berry"><X size={12}/></button>
+          <button
+            key={cell.snack}
+            type="button"
+            onClick={() => { setSwapping(false); setEdit(cell); }}
+            className="mb-2 flex h-[4.5rem] w-full flex-col justify-center rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/60"
+          >
+            <span className="mb-1 flex items-center gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wide text-primary">Lanche {cell.snack}</span>
+              {cell.training && <Dumbbell size={13} className="shrink-0 text-berry" />}
             </span>
-          </div>
+            <span className="block text-sm leading-tight line-clamp-3">{name}</span>
+          </button>
         );
       };
 
@@ -699,25 +701,41 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
       </>;
 
     })()}
-    {swap && (() => {
+    {edit && (() => {
+      const target = { childId: edit.childId, day: edit.day, snack: edit.snack };
+      const box = lunchboxes.find((x) => x.id === edit.lunchboxId) ?? null;
+      const r = recipes.find((x) => x.id === edit.recipeId) ?? null;
+      const current = edit.label ?? box?.name ?? r?.name ?? "";
       const q = swapQuery.trim().toLowerCase();
       const boxOptions = lunchboxes.filter((b) => !q || b.name.toLowerCase().includes(q) || b.description.toLowerCase().includes(q));
-      const recipeOptions = recipes.filter((r) => !q || r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q));
-      const choose = (kind: "box" | "recipe", id: string) => { replaceCell(swap, { kind, id }); setSwap(null); };
-      return <Modal title="Escolher outro lanche" close={() => setSwap(null)}>
-        <input value={swapQuery} onChange={(e)=>setSwapQuery(e.target.value)} placeholder="Procurar lancheira ou receita" className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"/>
-        <div className="mt-4 max-h-[55vh] space-y-4 overflow-y-auto">
-          <div>
-            <p className="mb-2 text-xs font-extrabold uppercase text-primary">Lancheiras</p>
-            <div className="space-y-1">{boxOptions.map((b)=><button key={b.id} type="button" onClick={()=>choose("box",b.id)} className="w-full rounded-md border border-border px-3 py-2 text-left text-sm hover:border-primary hover:bg-muted/60">{b.name}</button>)}
-            {!boxOptions.length && <p className="text-sm text-muted-foreground">Nada encontrado.</p>}</div>
+      const recipeOptions = recipes.filter((x) => !q || x.name.toLowerCase().includes(q) || x.description.toLowerCase().includes(q));
+      const choose = (kind: "box" | "recipe", id: string) => { replaceCell(target, { kind, id }); setEdit(null); setSwapping(false); };
+      return <Modal title={`Lanche ${edit.snack}`} close={() => { setEdit(null); setSwapping(false); }}>
+        {swapping ? <div>
+          <input value={swapQuery} onChange={(e)=>setSwapQuery(e.target.value)} placeholder="Procurar lancheira ou receita" className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm"/>
+          <div className="mt-4 max-h-[50vh] space-y-4 overflow-y-auto">
+            <div>
+              <p className="mb-2 text-xs font-extrabold uppercase text-primary">Lancheiras</p>
+              <div className="space-y-1">{boxOptions.map((b)=><button key={b.id} type="button" onClick={()=>choose("box",b.id)} className="w-full rounded-md border border-border px-3 py-2 text-left text-sm hover:border-primary hover:bg-muted/60">{b.name}</button>)}{!boxOptions.length && <p className="text-sm text-muted-foreground">Nada encontrado.</p>}</div>
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-extrabold uppercase text-primary">Receitas</p>
+              <div className="space-y-1">{recipeOptions.map((x)=><button key={x.id} type="button" onClick={()=>choose("recipe",x.id)} className="w-full rounded-md border border-border px-3 py-2 text-left text-sm hover:border-primary hover:bg-muted/60">{x.name}</button>)}{!recipeOptions.length && <p className="text-sm text-muted-foreground">Nada encontrado.</p>}</div>
+            </div>
           </div>
-          <div>
-            <p className="mb-2 text-xs font-extrabold uppercase text-primary">Receitas</p>
-            <div className="space-y-1">{recipeOptions.map((r)=><button key={r.id} type="button" onClick={()=>choose("recipe",r.id)} className="w-full rounded-md border border-border px-3 py-2 text-left text-sm hover:border-primary hover:bg-muted/60">{r.name}</button>)}
-            {!recipeOptions.length && <p className="text-sm text-muted-foreground">Nada encontrado.</p>}</div>
+          <Button variant="ghost" className="mt-4 w-full" onClick={()=>setSwapping(false)}>Voltar</Button>
+        </div> : <form onSubmit={(e)=>{ e.preventDefault(); const value = String(new FormData(e.currentTarget).get("label")); renameCell(target, value); setEdit(null); }} className="space-y-4">
+          <label className="block text-sm font-bold">O que vai neste lanche
+            <textarea name="label" defaultValue={current} className="mt-2 min-h-24 w-full rounded-md border border-input bg-background p-3 text-sm"/>
+          </label>
+          <p className="text-sm text-muted-foreground">Pode reescrever o texto à mão, escolher outra sugestão da sua lista ou retirar este lanche do plano.</p>
+          <Button type="submit" className="w-full"><Check size={16}/>Guardar texto</Button>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Button type="button" variant="outline" onClick={()=>{ setSwapQuery(""); setSwapping(true); }}><ArrowUpDown size={16}/>Escolher outra opção</Button>
+            {(box || r) && <Button type="button" variant="outline" onClick={()=>{ setOpen({ kind: box ? "box" : "recipe", id: (box?.id ?? r?.id)! }); setEdit(null); }}><ChevronRight size={16}/>Ver receita/detalhe</Button>}
           </div>
-        </div>
+          <Button type="button" variant="ghost" className="w-full text-berry" onClick={()=>{ removeCell(target); setEdit(null); }}><X size={16}/>Retirar do plano</Button>
+        </form>}
       </Modal>;
     })()}
     {openBox && <LunchboxDetail box={openBox} image={imageFor(openBox.id, openBox.image_url, 0)} setImage={(url)=>setImage("lunchboxes",openBox.id,url)} picked={picked.includes(openBox.id)} toggle={()=>toggleBox(openBox.id)} close={()=>setOpen(null)} recipes={recipes} openRecipe={(id)=>setOpen({kind:"recipe",id})}/>}

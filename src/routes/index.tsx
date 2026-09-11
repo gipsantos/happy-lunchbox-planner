@@ -269,7 +269,7 @@ function Index() {
   const recipePool = useMemo(() => recipes.filter((r) => pickedRecipes.includes(r.id)), [recipes, pickedRecipes]);
 
   useEffect(() => {
-    if ((!pool.length && !recipes.length) || plan.length) return;
+    if (restoring || (!pool.length && !recipes.length) || plan.length) return;
     type Cand = { id: string; box?: Lunchbox; recipe?: Recipe };
     const next: PlanCell[] = [];
     const rand = <T,>(list: T[]) => list[Math.floor(Math.random() * list.length)];
@@ -277,12 +277,14 @@ function Index() {
     const fitsRecipe = (r: Recipe, age: number, training: boolean) => r.min_age <= age && r.max_age >= age && (!training || r.training_suitable);
     const usedCommon = new Set<string>();
     const yesterdayByChild = new Map<string, Set<string>>();
-    for (let day = 0; day < 5; day++) {
+    const totalDays = period === "month" ? 20 : 5;
+    for (let day = 0; day < totalDays; day++) {
+      const weekday = day % 5;
       let common: Cand | undefined;
       if (familyMode && children.length > 1) {
         const cands: Cand[] = [
-          ...pool.filter((b) => children.every((c) => fits(b, c.age, c.training_days.includes(day)))).map((box) => ({ id: box.id, box })),
-          ...recipePool.filter((r) => children.every((c) => fitsRecipe(r, c.age, c.training_days.includes(day)))).map((recipe) => ({ id: recipe.id, recipe })),
+          ...pool.filter((b) => children.every((c) => fits(b, c.age, c.training_days.includes(weekday)))).map((box) => ({ id: box.id, box })),
+          ...recipePool.filter((r) => children.every((c) => fitsRecipe(r, c.age, c.training_days.includes(weekday)))).map((recipe) => ({ id: recipe.id, recipe })),
         ];
         let fresh = cands.filter((c) => !usedCommon.has(c.id));
         if (!fresh.length) { usedCommon.clear(); fresh = cands; }
@@ -294,7 +296,8 @@ function Index() {
         const yesterday = yesterdayByChild.get(child.id) ?? new Set<string>();
         const todayIds: string[] = [];
         for (let snack = 1; snack <= child.snacks_per_day; snack++) {
-          const training = child.training_days.includes(day);
+          const training = child.training_days.includes(weekday);
+
           const cands: Cand[] = [
             ...pool.filter((b) => fits(b, child.age, training)).map((box) => ({ id: box.id, box })),
             ...recipePool.filter((r) => fitsRecipe(r, child.age, training)).map((recipe) => ({ id: recipe.id, recipe })),

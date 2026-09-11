@@ -1,19 +1,26 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Apple, CalendarDays, Check, Clock3, Dumbbell, LogIn, Plus, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
+import { Apple, CalendarDays, Check, Clock3, Dumbbell, FileUp, LogIn, Plus, Sandwich, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import type { Tables } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
+import { importPlanText, type ImportResult } from "@/lib/import.functions";
 import muffins from "@/assets/muffins-banana.jpeg.asset.json";
 import lunchbox from "@/assets/lancheira-colorida.jpeg.asset.json";
 import fruitBoxes from "@/assets/caixas-fruta.jpeg.asset.json";
 
-type Tab = "plano" | "receitas" | "compras" | "familia";
+type Tab = "plano" | "lancheiras" | "receitas" | "compras" | "familia";
 type Child = Pick<Tables<"children">, "id" | "name" | "age" | "snacks_per_day" | "training_days" | "training_timing">;
 type Recipe = Tables<"recipes">;
+type Lunchbox = Tables<"lunchboxes">;
+type LunchItem = { label: string; kind: "recipe" | "bought" };
 type Ingredient = { name: string; quantity: number; unit: string };
-type PlanCell = { childId: string; day: number; snack: number; recipeId: string; training: boolean };
+type PlanCell = { childId: string; day: number; snack: number; recipeId: string | null; lunchboxId: string | null; training: boolean };
+
+const itemsOf = (box: Lunchbox) => (Array.isArray(box.items) ? (box.items as LunchItem[]) : []);
+const ingredientsOf = (value: unknown) => (Array.isArray(value) ? (value as Ingredient[]) : []);
+
 
 const demoChildren: Child[] = [
   { id: "ines", name: "Inês", age: 5, snacks_per_day: 1, training_days: [2], training_timing: "after" },

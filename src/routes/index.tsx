@@ -542,7 +542,8 @@ function LunchboxesView({ lunchboxes, recipes, picked, pickedRecipes, toggle, to
       <ChevronRight size={17} className="shrink-0 text-muted-foreground"/></button>
       <button type="button" onClick={()=>toggle(b.id)} aria-pressed={active} aria-label={active?`Retirar ${b.name} do plano`:`Usar ${b.name} no plano`} className={`mr-3 grid size-8 shrink-0 place-items-center rounded-full border ${active?"border-primary bg-primary text-primary-foreground":"border-border text-muted-foreground"}`}>{active?<Check size={16}/>:<Plus size={16}/>}</button></li>})}</ol>}
     {!shown.length&&<p className="text-muted-foreground">Ainda não há lancheiras neste filtro.</p>}
-    {open&&<LunchboxDetail box={open} image={thumbOf(open, shown.indexOf(open))} setImage={(url)=>setImage(open.id,url)} picked={picked.includes(open.id)} toggle={()=>toggle(open.id)} close={()=>setOpenId(null)}/>}
+    {open&&<LunchboxDetail box={open} image={thumbOf(open, shown.indexOf(open))} setImage={(url)=>setImage(open.id,url)} picked={picked.includes(open.id)} toggle={()=>toggle(open.id)} close={()=>setOpenId(null)} recipes={recipes} openRecipe={setOpenRecipeId}/>}
+    {openRecipe&&<RecipeDetail recipe={openRecipe} image={images[openRecipe.id]||openRecipe.image_url||muffins.url} setImage={(url)=>setImage(openRecipe.id,url)} picked={pickedRecipes.includes(openRecipe.id)} toggle={()=>toggleRecipe(openRecipe.id)} close={()=>setOpenRecipeId(null)}/>}
   </section>;
 }
 

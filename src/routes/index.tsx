@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Apple, CalendarDays, Check, ChevronLeft, ChevronRight, Clock3, Dumbbell, LogIn, Plus, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
+import { Apple, CalendarDays, Check, Clock3, Dumbbell, LogIn, Plus, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import type { Tables } from "@/integrations/supabase/types";
@@ -40,6 +40,7 @@ function Index() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [plan, setPlan] = useState<PlanCell[]>([]);
   const [familyMode, setFamilyMode] = useState(true);
+  const [period, setPeriod] = useState<"week" | "month">("week");
   const [selectedChild, setSelectedChild] = useState("all");
   const [modal, setModal] = useState<"child" | "recipe" | "auth" | null>(null);
   const [search, setSearch] = useState("");
@@ -102,6 +103,27 @@ function Index() {
     window.setTimeout(() => setNotice(""), 3200);
   }
 
+  async function savePlan() {
+    if (!sessionId) { setModal("auth"); return; }
+    const chosenChild = selectedChild === "all" ? null : selectedChild;
+    const { data: saved, error } = await supabase.from("meal_plans").insert({
+      user_id: sessionId,
+      title: period === "week" ? "Plano semanal" : "Plano mensal",
+      period_type: period,
+      plan_mode: chosenChild ? "child" : "family",
+      child_id: chosenChild,
+      starts_on: "2026-09-14",
+    }).select().single();
+    if (error || !saved) { setNotice("Não foi possível guardar o plano."); return; }
+    const baseDate = new Date("2026-09-14T12:00:00");
+    const rows = plan.map((item) => {
+      const date = new Date(baseDate); date.setDate(date.getDate() + item.day);
+      return { plan_id: saved.id, child_id: item.childId, recipe_id: item.recipeId, snack_date: date.toISOString().slice(0,10), snack_number: item.snack, training_boost: item.training };
+    });
+    const { error: itemError } = await supabase.from("plan_items").insert(rows);
+    setNotice(itemError ? "O plano foi criado, mas faltaram alguns lanches." : "Plano guardado com sucesso.");
+  }
+
   async function addChild(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -150,7 +172,7 @@ function Index() {
 
       <main className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6">
         {notice && <div className="fixed right-5 top-20 z-50 rounded-md bg-foreground px-4 py-3 text-sm text-background shadow-xl">{notice}</div>}
-        {tab === "plano" && <PlanView children={visibleChildren} allChildren={children} recipes={recipes} plan={plan} familyMode={familyMode} selectedChild={selectedChild} setSelectedChild={setSelectedChild} setFamilyMode={setFamilyMode} regenerate={regenerate} />}
+        {tab === "plano" && <PlanView children={visibleChildren} allChildren={children} recipes={recipes} plan={plan} familyMode={familyMode} selectedChild={selectedChild} setSelectedChild={setSelectedChild} setFamilyMode={setFamilyMode} period={period} setPeriod={setPeriod} regenerate={regenerate} savePlan={savePlan} />}
         {tab === "receitas" && <RecipesView recipes={recipes} search={search} setSearch={setSearch} openAdd={() => setModal("recipe")} />}
         {tab === "compras" && <ShoppingView items={shopping} childName={selectedChild === "all" ? "toda a família" : visibleChildren[0]?.name ?? "plano"} />}
         {tab === "familia" && <FamilyView children={children} openAdd={() => setModal("child")} />}
@@ -168,13 +190,15 @@ function PageHeading({ eyebrow, title, text, action }: { eyebrow: string; title:
   return <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-extrabold uppercase text-primary">{eyebrow}</p><h1 className="text-4xl sm:text-5xl">{title}</h1><p className="mt-2 max-w-2xl text-muted-foreground">{text}</p></div>{action}</div>;
 }
 
-function PlanView({ children, allChildren, recipes, plan, familyMode, selectedChild, setSelectedChild, setFamilyMode, regenerate }: { children: Child[]; allChildren: Child[]; recipes: Recipe[]; plan: PlanCell[]; familyMode: boolean; selectedChild: string; setSelectedChild:(v:string)=>void; setFamilyMode:(v:boolean)=>void; regenerate:()=>void }) {
-  return <section><PageHeading eyebrow="Semana de 14 a 18 de setembro" title="O que vai na lancheira?" text="Uma semana equilibrada, adaptada a cada idade e aos dias com mais energia." action={<Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button>}/>
+function PlanView({ children, allChildren, recipes, plan, familyMode, selectedChild, setSelectedChild, setFamilyMode, period, setPeriod, regenerate, savePlan }: { children: Child[]; allChildren: Child[]; recipes: Recipe[]; plan: PlanCell[]; familyMode: boolean; selectedChild: string; setSelectedChild:(v:string)=>void; setFamilyMode:(v:boolean)=>void; period:"week"|"month"; setPeriod:(v:"week"|"month")=>void; regenerate:()=>void; savePlan:()=>void }) {
+  return <section><PageHeading eyebrow={period === "week" ? "Semana de 14 a 18 de setembro" : "Setembro de 2026 · 4 semanas"} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana" : "Um mês"} equilibrado, adaptado a cada idade e aos dias com mais energia.`} action={<div className="flex gap-2"><Button variant="outline" onClick={savePlan}><Check size={17}/>Guardar</Button><Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button></div>}/>
     <div className="mb-6 flex flex-wrap items-center gap-3">
+      <div className="inline-flex rounded-md border border-border bg-card p-1"><Button size="sm" variant={period === "week" ? "secondary":"ghost"} onClick={()=>setPeriod("week")}>Semana</Button><Button size="sm" variant={period === "month" ? "secondary":"ghost"} onClick={()=>setPeriod("month")}>Mês</Button></div>
       <div className="inline-flex rounded-md border border-border bg-card p-1"><Button size="sm" variant={familyMode ? "secondary":"ghost"} onClick={()=>{setFamilyMode(true);setSelectedChild("all")}}>Agregado</Button><Button size="sm" variant={!familyMode ? "secondary":"ghost"} onClick={()=>{setFamilyMode(false);setSelectedChild(allChildren[0]?.id ?? "all")}}>Por filho</Button></div>
       {!familyMode && <select value={selectedChild} onChange={(e)=>setSelectedChild(e.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm">{allChildren.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}</select>}
       <p className="text-sm text-muted-foreground">No plano agregado, repetimos receitas adequadas para poupar preparação.</p>
     </div>
+    {period === "month" && <div className="mb-5 grid grid-cols-4 gap-2">{[1,2,3,4].map((week)=><button key={week} className={`rounded-md border p-3 text-left text-sm ${week===1?'border-primary bg-leaf-soft':'border-border bg-card'}`} onClick={()=>setPeriod("week")}><b>Semana {week}</b><span className="block text-xs text-muted-foreground">{week===1?'14–18 set':week===2?'21–25 set':week===3?'28 set–2 out':'5–9 out'}</span></button>)}</div>}
     <div className="overflow-x-auto border-y border-border bg-card"><div className="grid min-w-[920px] grid-cols-[150px_repeat(5,minmax(145px,1fr))]">
       <div className="border-b border-r border-border p-4 text-sm font-bold text-muted-foreground">Criança</div>{weekDays.map((d,i)=><div key={d} className="border-b border-r border-border p-4"><b>{d}</b><span className="ml-2 text-xs text-muted-foreground">{14+i} set</span></div>)}
       {children.map((child)=><div className="contents" key={child.id}><div className="border-b border-r border-border p-4"><div className="mb-1 flex size-10 items-center justify-center rounded-full bg-leaf-soft font-bold text-primary">{child.name[0]}</div><b>{child.name}</b><p className="text-xs text-muted-foreground">{child.age} anos · {child.snacks_per_day} {child.snacks_per_day===1?'lanche':'lanches'}</p></div>{weekDays.map((_,day)=>{const cells=plan.filter((p)=>p.childId===child.id&&p.day===day);return <div key={day} className="min-h-36 border-b border-r border-border p-3">{cells.map((cell)=>{const r=recipes.find((x)=>x.id===cell.recipeId);return <div key={cell.snack} className="mb-2 rounded-md bg-muted p-3"><div className="mb-2 flex items-center justify-between"><span className="text-[11px] font-extrabold uppercase text-primary">Lanche {cell.snack}</span>{cell.training&&<Dumbbell size={15} className="text-berry"/>}</div><p className="text-sm font-bold leading-tight">{r?.name ?? "A preparar…"}</p><p className="mt-1 text-xs text-muted-foreground">+ fruta · proteína · água</p></div>})}{child.training_days.includes(day)&&<span className="text-[11px] font-bold text-berry">Dia de treino · reforçado</span>}</div>})}</div>)}

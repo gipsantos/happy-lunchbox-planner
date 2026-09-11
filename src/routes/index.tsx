@@ -171,7 +171,10 @@ function Index() {
   const [plan, setPlan] = useState<PlanCell[]>([]);
   const [familyMode, setFamilyMode] = useState(true);
   const [period, setPeriod] = useState<"week" | "month">("week");
+  const [weekStartIso, setWeekStartIso] = useState("");
+  const [restoring, setRestoring] = useState(true);
   const [selectedChild, setSelectedChild] = useState("all");
+
   const [modal, setModal] = useState<"child" | "recipe" | "auth" | "import" | null>(null);
   const [search, setSearch] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);

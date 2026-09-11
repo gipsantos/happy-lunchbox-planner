@@ -23,3 +23,4 @@
 ## Novo
 - [ ] Imprimir/PDF e imagem com a tabela completa (todas as semanas)
 - [ ] Editar/trocar um lanche do plano e limpar o plano
+- [ ] Popup ao clicar no lanche: editar texto, trocar opção ou remover (sem botões no cartão)

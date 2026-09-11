@@ -205,6 +205,8 @@ function Index() {
 
   useEffect(() => {
     let active = true;
+    const thisMonday = mondayOf();
+    setWeekStartIso(isoDate(thisMonday));
     async function load() {
       const [{ data: recipeData }, { data: boxData }, { data: auth }] = await Promise.all([
         supabase.from("recipes").select("*").order("created_at"),
@@ -220,22 +222,41 @@ function Index() {
         if (url) stored[(row as { id: string }).id] = url;
       });
       setImages((old) => ({ ...stored, ...old }));
-      if (auth.user) {
-        setSessionId(auth.user.id);
-        const [{ data: childData }, { data: pickData }] = await Promise.all([
-          supabase.from("children").select("*").order("created_at"),
-          supabase.from("lunchbox_selections").select("lunchbox_id"),
-        ]);
-        if (!active) return;
-        if (childData?.length) {
-          setChildren(childData);
-          const photos: Record<string, string> = {};
-          (childData as { id: string; photo_url?: string | null }[]).forEach((c) => { if (c.photo_url) photos[c.id] = c.photo_url; });
-          setImages((old) => ({ ...old, ...photos }));
-        }
-        if (pickData?.length) setPicked(pickData.map((row) => row.lunchbox_id));
+      if (!auth.user) { setRestoring(false); return; }
+      setSessionId(auth.user.id);
+      const [{ data: childData }, { data: pickData }, { data: planData }] = await Promise.all([
+        supabase.from("children").select("*").order("created_at"),
+        supabase.from("lunchbox_selections").select("lunchbox_id"),
+        supabase.from("meal_plans").select("*").order("created_at", { ascending: false }).limit(1),
+      ]);
+      if (!active) return;
+      if (childData?.length) {
+        setChildren(childData);
+        const photos: Record<string, string> = {};
+        (childData as { id: string; photo_url?: string | null }[]).forEach((c) => { if (c.photo_url) photos[c.id] = c.photo_url; });
+        setImages((old) => ({ ...old, ...photos }));
       }
+      if (pickData?.length) setPicked(pickData.map((row) => row.lunchbox_id));
+      const savedPlan = planData?.[0];
+      if (savedPlan) {
+        const { data: itemData } = await supabase.from("plan_items").select("*").eq("plan_id", savedPlan.id);
+        if (!active) return;
+        const start = parseIso(savedPlan.starts_on);
+        const cells: PlanCell[] = (itemData ?? []).flatMap((item) => {
+          const day = planDayOfDate(start, item.snack_date);
+          if (day < 0 || !item.child_id) return [];
+          return [{ childId: item.child_id, day, snack: item.snack_number, recipeId: item.recipe_id, lunchboxId: item.lunchbox_id, training: item.training_boost }];
+        });
+        if (cells.length) {
+          setWeekStartIso(savedPlan.starts_on);
+          setPeriod(savedPlan.period_type === "month" ? "month" : "week");
+          if (savedPlan.child_id) { setFamilyMode(false); setSelectedChild(savedPlan.child_id); }
+          setPlan(cells);
+        }
+      }
+      setRestoring(false);
     }
+
     load();
     return () => { active = false; };
   }, []);

@@ -435,6 +435,15 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
   const [open, setOpen] = useState<{ kind: "box" | "recipe"; id: string } | null>(null);
   const [day, setDay] = useState(0);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!actionsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) setActionsOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [actionsOpen]);
   const openBox = open?.kind === "box" ? lunchboxes.find((b) => b.id === open.id) ?? null : null;
   const openRecipe = open?.kind === "recipe" ? recipes.find((r) => r.id === open.id) ?? null : null;
   const fallbacks = [lunchbox.url, fruitBoxes.url, muffins.url];

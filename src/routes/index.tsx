@@ -472,20 +472,26 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
     </div>
     {period === "month" && <div className="mb-5 grid grid-cols-4 gap-2">{[1,2,3,4].map((week)=><button key={week} className={`rounded-md border p-3 text-left text-sm ${week===1?'border-primary bg-leaf-soft':'border-border bg-card'}`} onClick={()=>setPeriod("week")}><b>Semana {week}</b><span className="block text-xs text-muted-foreground">{week===1?'14–18 set':week===2?'21–25 set':week===3?'28 set–2 out':'5–9 out'}</span></button>)}</div>}
     {(() => {
-      const snackCard = (cell: PlanCell, i: number) => {
+      const snackPill = (cell: PlanCell) => {
         const box = lunchboxes.find((x) => x.id === cell.lunchboxId);
         const r = recipes.find((x) => x.id === cell.recipeId);
-        const parts = box ? itemsOf(box).map((it) => it.label) : ingredientsOf(r?.ingredients).map((it) => it.name).slice(0, 3);
         const name = box?.name ?? r?.name ?? "A preparar…";
         const id = box?.id ?? r?.id;
-        return <button key={cell.snack} type="button" disabled={!id} onClick={() => id && setOpen({ kind: box ? "box" : "recipe", id })} className="mb-2 flex w-full items-start gap-3 rounded-md bg-muted p-3 text-left transition-colors hover:bg-muted/70 disabled:cursor-default">
-          <img src={imageFor(id ?? "x", box?.image_url ?? r?.image_url, i)} alt="" className="size-12 shrink-0 rounded-md object-cover" loading="lazy"/>
-          <span className="min-w-0 flex-1">
-            <span className="mb-1 flex items-center justify-between gap-2"><span className="text-[11px] font-extrabold uppercase text-primary">Lanche {cell.snack}</span>{cell.training && <Dumbbell size={15} className="shrink-0 text-berry"/>}</span>
-            <span className="block text-sm font-bold leading-tight">{name}</span>
-            <span className="mt-1 block text-xs text-muted-foreground">{parts.join(" · ")}</span>
-          </span>
-        </button>;
+        return (
+          <button
+            key={cell.snack}
+            type="button"
+            disabled={!id}
+            onClick={() => id && setOpen({ kind: box ? "box" : "recipe", id })}
+            className="mb-2 block w-full rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/60 disabled:cursor-default"
+          >
+            <span className="mb-0.5 flex items-center justify-between gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wide text-primary">Lanche {cell.snack}</span>
+              {cell.training && <Dumbbell size={13} className="shrink-0 text-berry" />}
+            </span>
+            <span className="block truncate font-bold leading-tight">{name}</span>
+          </button>
+        );
       };
 
       return <>
@@ -496,14 +502,14 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
             const cells = plan.filter((p) => p.childId === child.id && p.day === day);
             return <article key={child.id} className="rounded-md border border-border bg-card p-4">
               <div className="mb-3 flex items-center gap-3"><span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full bg-leaf-soft font-bold text-primary">{images[child.id] ? <img src={images[child.id]} alt="" className="size-full object-cover"/> : child.name[0]}</span><span className="min-w-0"><b className="block truncate">{child.name}</b><span className="text-xs text-muted-foreground">{child.age} anos · {child.snacks_per_day} {child.snacks_per_day === 1 ? "lanche" : "lanches"}</span></span>{child.training_days.includes(day) && <span className="ml-auto shrink-0 rounded-full bg-accent px-2 py-1 text-[11px] font-bold text-accent-foreground"><Dumbbell size={11} className="mr-1 inline"/>treino</span>}</div>
-              {cells.length ? cells.map((cell, i) => snackCard(cell, i)) : <p className="text-sm text-muted-foreground">Sem lanche definido para este dia.</p>}
+              {cells.length ? cells.map((cell) => snackPill(cell)) : <p className="text-sm text-muted-foreground">Sem lanche definido para este dia.</p>}
             </article>;
           })}</div>
         </div>
 
         <div className="hidden overflow-x-auto border-y border-border bg-card md:block print:block"><div className="grid min-w-[880px] grid-cols-[150px_repeat(5,minmax(145px,1fr))]">
           <div className="border-b border-r border-border p-4 text-sm font-bold text-muted-foreground">Criança</div>{weekDays.map((d,i)=><div key={d} className="border-b border-r border-border p-4"><b>{d}</b><span className="ml-2 text-xs text-muted-foreground">{14+i} set</span></div>)}
-          {children.map((child)=><div className="contents" key={child.id}><div className="border-b border-r border-border p-4"><div className="mb-1 grid size-10 place-items-center overflow-hidden rounded-full bg-leaf-soft font-bold text-primary">{images[child.id]?<img src={images[child.id]} alt="" className="size-full object-cover"/>:child.name[0]}</div><b>{child.name}</b><p className="text-xs text-muted-foreground">{child.age} anos · {child.snacks_per_day} {child.snacks_per_day===1?'lanche':'lanches'}</p></div>{weekDays.map((_,d)=>{const cells=plan.filter((p)=>p.childId===child.id&&p.day===d);return <div key={d} className="min-h-36 border-b border-r border-border p-3">{cells.map((cell,i)=>snackCard(cell,i))}{child.training_days.includes(d)&&<span className="text-[11px] font-bold text-berry">Dia de treino · reforçado</span>}</div>})}</div>)}
+          {children.map((child)=><div className="contents" key={child.id}><div className="border-b border-r border-border p-4"><div className="mb-1 grid size-10 place-items-center overflow-hidden rounded-full bg-leaf-soft font-bold text-primary">{images[child.id]?<img src={images[child.id]} alt="" className="size-full object-cover"/>:child.name[0]}</div><b>{child.name}</b><p className="text-xs text-muted-foreground">{child.age} anos · {child.snacks_per_day} {child.snacks_per_day===1?'lanche':'lanches'}</p></div>{weekDays.map((_,d)=>{const cells=plan.filter((p)=>p.childId===child.id&&p.day===d);return <div key={d} className="min-h-28 border-b border-r border-border p-3 align-top">{cells.map((cell)=>snackPill(cell))}{child.training_days.includes(d)&&<span className="text-[11px] font-bold text-berry">Dia de treino · reforçado</span>}</div>})}</div>)}
         </div></div>
       </>;
     })()}

@@ -277,7 +277,6 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, plan, fa
   </section>;
 }
 
-function RecipesView({ recipes, search, setSearch, openAdd }: { recipes: Recipe[]; search:string; setSearch:(v:string)=>void; openAdd:()=>void }) {
 function LunchboxesView({ lunchboxes, picked, toggle, openImport, clear }: { lunchboxes: Lunchbox[]; picked: string[]; toggle:(id:string)=>void; openImport:()=>void; clear:()=>void }) {
   const [filter, setFilter] = useState<"todas" | "sem-receita" | "treino" | "escolhidas">("todas");
   const shown = lunchboxes.filter((b) => filter === "todas" || (filter === "sem-receita" ? itemsOf(b).every((i) => i.kind === "bought") : filter === "treino" ? b.training_suitable : picked.includes(b.id)));

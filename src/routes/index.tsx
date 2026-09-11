@@ -501,10 +501,11 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
   </section>;
 }
 
-function LunchboxesView({ lunchboxes, picked, toggle, images, setImage, openImport, clear }: { lunchboxes: Lunchbox[]; picked: string[]; toggle:(id:string)=>void; images: Record<string,string>; setImage:(id:string,url:string)=>void; openImport:()=>void; clear:()=>void }) {
+function LunchboxesView({ lunchboxes, recipes, picked, pickedRecipes, toggle, toggleRecipe, images, setImage, openImport, clear }: { lunchboxes: Lunchbox[]; recipes: Recipe[]; picked: string[]; pickedRecipes: string[]; toggle:(id:string)=>void; toggleRecipe:(id:string)=>void; images: Record<string,string>; setImage:(id:string,url:string)=>void; openImport:()=>void; clear:()=>void }) {
   const [filter, setFilter] = useState<"todas" | "sem-receita" | "treino" | "escolhidas">("todas");
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [openRecipeId, setOpenRecipeId] = useState<string | null>(null);
   const [view, setView] = useView("lancheira-vista-lancheiras");
   const fallbacks = [lunchbox.url, fruitBoxes.url, muffins.url];
   const shown = lunchboxes.filter((b) => {

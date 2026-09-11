@@ -88,9 +88,18 @@ function Index() {
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [notice, setNotice] = useState("");
 
+  const [images, setImages] = useState<Record<string, string>>({});
+
   function flash(message: string) {
     setNotice(message);
     window.setTimeout(() => setNotice(""), 4000);
+  }
+
+  async function setImage(table: "recipes" | "lunchboxes", id: string, dataUrl: string) {
+    setImages((old) => ({ ...old, [id]: dataUrl }));
+    if (!sessionId) { flash("Entre na sua conta para guardar a imagem."); return; }
+    const { error } = await supabase.from(table).update({ image_url: dataUrl }).eq("id", id);
+    flash(error ? "A imagem aparece agora, mas não ficou guardada (sugestão da app)." : "Imagem atualizada.");
   }
 
   useEffect(() => {

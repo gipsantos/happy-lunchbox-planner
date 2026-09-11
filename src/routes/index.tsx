@@ -462,7 +462,22 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
     window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
   }
   return <section><PageHeading eyebrow={period === "week" ? "Semana de 14 a 18 de setembro" : "Setembro de 2026 · 4 semanas"} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana equilibrada" : "Um mês equilibrado"}, adaptado a cada idade e aos dias com mais energia. Toque num lanche para ver os detalhes.`}/>
-    <div className="mb-6 flex flex-wrap gap-2 print:hidden"><Button variant="outline" onClick={exportCsv}><FileUp size={17}/>Exportar</Button><Button variant="outline" onClick={()=>window.print()}><CalendarDays size={17}/>Imprimir</Button><Button variant="outline" onClick={shareWhatsApp}><MessageCircle size={17}/>WhatsApp</Button><Button variant="outline" onClick={savePlan}><Check size={17}/>Guardar</Button><Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button></div>
+    <div className="mb-6 flex flex-wrap items-start gap-3 print:hidden">
+      <div className="relative">
+        <Button variant="outline" onClick={() => setActionsOpen((v) => !v)} aria-expanded={actionsOpen} aria-haspopup="menu"><CalendarDays size={17}/>Ações do plano</Button>
+        {actionsOpen && (
+          <div className="absolute left-1/2 top-full z-50 mt-1 w-52 -translate-x-1/2 rounded-md border border-border bg-background py-1 shadow-xl" onMouseDown={(e) => e.stopPropagation()}>
+            <button onClick={() => { exportCsv(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><FileUp size={15}/>Exportar CSV</button>
+            <button onClick={() => { window.print(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><CalendarDays size={15}/>Imprimir</button>
+            <button onClick={() => { shareWhatsApp(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><MessageCircle size={15}/>WhatsApp</button>
+            <button onClick={() => { savePlan(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><Check size={15}/>Guardar</button>
+            <div className="my-1 border-t border-border" />
+            <button onClick={() => { regenerate(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold text-primary hover:bg-muted"><Sparkles size={15}/>Gerar novo plano</button>
+          </div>
+        )}
+      </div>
+      <Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button>
+    </div>
     <div className="mb-6 flex flex-wrap items-center gap-3">
       <div className="inline-flex rounded-md border border-border bg-card p-1"><Button size="sm" variant={period === "week" ? "secondary":"ghost"} onClick={()=>setPeriod("week")}>Semana</Button><Button size="sm" variant={period === "month" ? "secondary":"ghost"} onClick={()=>setPeriod("month")}>Mês</Button></div>
       <div className="inline-flex rounded-md border border-border bg-card p-1"><Button size="sm" variant={familyMode ? "secondary":"ghost"} onClick={()=>{setFamilyMode(true);setSelectedChild("all")}}>Agregado</Button><Button size="sm" variant={!familyMode ? "secondary":"ghost"} onClick={()=>{setFamilyMode(false);setSelectedChild(allChildren[0]?.id ?? "all")}}>Por filho</Button></div>

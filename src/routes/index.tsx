@@ -234,7 +234,12 @@ function Index() {
   function regenerate() {
     setGenCount((c) => c + 1);
     setPlan([]);
-    flash(picked.length ? "Plano gerado apenas com as lancheiras que escolheu." : "Plano ajustado às idades e aos dias de treino.");
+    flash(picked.length || pickedRecipes.length ? "Novo plano gerado apenas com as sugestões que escolheu." : "Novo plano ajustado às idades e aos dias de treino.");
+  }
+
+  function toggleRecipe(id: string) {
+    setPickedRecipes((old) => (old.includes(id) ? old.filter((x) => x !== id) : [...old, id]));
+    setPlan([]);
   }
 
   async function togglePick(id: string) {
@@ -341,7 +346,7 @@ function Index() {
         {notice && <div className="fixed right-5 top-20 z-50 max-w-xs rounded-md bg-foreground px-4 py-3 text-sm text-background shadow-xl">{notice}</div>}
         {tab === "plano" && <PlanView children={visibleChildren} allChildren={children} recipes={recipes} lunchboxes={lunchboxes} picked={picked} plan={plan} familyMode={familyMode} selectedChild={selectedChild} setSelectedChild={setSelectedChild} setFamilyMode={setFamilyMode} period={period} setPeriod={setPeriod} regenerate={regenerate} savePlan={savePlan} openLunchboxes={() => setTab("lancheiras")} />}
         {tab === "lancheiras" && <LunchboxesView lunchboxes={lunchboxes} picked={picked} toggle={togglePick} images={images} setImage={(id,url)=>setImage("lunchboxes",id,url)} openImport={() => setModal("import")} clear={() => { setPicked([]); setPlan([]); if (sessionId) supabase.from("lunchbox_selections").delete().eq("user_id", sessionId); }} />}
-        {tab === "receitas" && <RecipesView recipes={recipes} search={search} setSearch={setSearch} images={images} setImage={(id,url)=>setImage("recipes",id,url)} openAdd={() => setModal("recipe")} openImport={() => setModal("import")} />}
+        {tab === "receitas" && <RecipesView recipes={recipes} search={search} setSearch={setSearch} images={images} setImage={(id,url)=>setImage("recipes",id,url)} openAdd={() => setModal("recipe")} openImport={() => setModal("import")} picked={pickedRecipes} toggle={toggleRecipe} />}
         {tab === "compras" && <ShoppingView items={shopping} childName={selectedChild === "all" ? "toda a família" : visibleChildren[0]?.name ?? "plano"} />}
         {tab === "familia" && <FamilyView children={children} images={images} setPhoto={(id,url)=>setImage("children",id,url)} openAdd={() => { setEditingChild(null); setModal("child"); }} openEdit={(child)=>{ setEditingChild(child); setModal("child"); }} remove={removeChild} />}
       </main>

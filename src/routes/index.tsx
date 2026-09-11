@@ -126,6 +126,27 @@ const demoChildren: Child[] = [
 ];
 const weekDays = ["Seg", "Ter", "Qua", "Qui", "Sex"];
 const fullDays = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira"];
+const monthsShort = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+function mondayOf(base = new Date()) {
+  const d = new Date(base);
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d;
+}
+const addDays = (base: Date, n: number) => { const d = new Date(base); d.setDate(d.getDate() + n); return d; };
+const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const parseIso = (value: string) => new Date(`${value}T12:00:00`);
+const shortLabel = (d: Date) => `${d.getDate()} ${monthsShort[d.getMonth()]}`;
+// dia 0..N do plano -> data real (5 dias úteis por semana)
+const dateOfPlanDay = (start: Date, day: number) => addDays(start, Math.floor(day / 5) * 7 + (day % 5));
+const planDayOfDate = (start: Date, value: string) => {
+  const diff = Math.round((parseIso(value).getTime() - start.getTime()) / 86400000);
+  const weekday = diff % 7;
+  if (weekday < 0 || weekday > 4 || diff < 0) return -1;
+  return Math.floor(diff / 7) * 5 + weekday;
+};
+
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
@@ -150,7 +171,10 @@ function Index() {
   const [plan, setPlan] = useState<PlanCell[]>([]);
   const [familyMode, setFamilyMode] = useState(true);
   const [period, setPeriod] = useState<"week" | "month">("week");
+  const [weekStartIso, setWeekStartIso] = useState("");
+  const [restoring, setRestoring] = useState(true);
   const [selectedChild, setSelectedChild] = useState("all");
+
   const [modal, setModal] = useState<"child" | "recipe" | "auth" | "import" | null>(null);
   const [search, setSearch] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -181,6 +205,8 @@ function Index() {
 
   useEffect(() => {
     let active = true;
+    const thisMonday = mondayOf();
+    setWeekStartIso(isoDate(thisMonday));
     async function load() {
       const [{ data: recipeData }, { data: boxData }, { data: auth }] = await Promise.all([
         supabase.from("recipes").select("*").order("created_at"),
@@ -196,22 +222,41 @@ function Index() {
         if (url) stored[(row as { id: string }).id] = url;
       });
       setImages((old) => ({ ...stored, ...old }));
-      if (auth.user) {
-        setSessionId(auth.user.id);
-        const [{ data: childData }, { data: pickData }] = await Promise.all([
-          supabase.from("children").select("*").order("created_at"),
-          supabase.from("lunchbox_selections").select("lunchbox_id"),
-        ]);
-        if (!active) return;
-        if (childData?.length) {
-          setChildren(childData);
-          const photos: Record<string, string> = {};
-          (childData as { id: string; photo_url?: string | null }[]).forEach((c) => { if (c.photo_url) photos[c.id] = c.photo_url; });
-          setImages((old) => ({ ...old, ...photos }));
-        }
-        if (pickData?.length) setPicked(pickData.map((row) => row.lunchbox_id));
+      if (!auth.user) { setRestoring(false); return; }
+      setSessionId(auth.user.id);
+      const [{ data: childData }, { data: pickData }, { data: planData }] = await Promise.all([
+        supabase.from("children").select("*").order("created_at"),
+        supabase.from("lunchbox_selections").select("lunchbox_id"),
+        supabase.from("meal_plans").select("*").order("created_at", { ascending: false }).limit(1),
+      ]);
+      if (!active) return;
+      if (childData?.length) {
+        setChildren(childData);
+        const photos: Record<string, string> = {};
+        (childData as { id: string; photo_url?: string | null }[]).forEach((c) => { if (c.photo_url) photos[c.id] = c.photo_url; });
+        setImages((old) => ({ ...old, ...photos }));
       }
+      if (pickData?.length) setPicked(pickData.map((row) => row.lunchbox_id));
+      const savedPlan = planData?.[0];
+      if (savedPlan) {
+        const { data: itemData } = await supabase.from("plan_items").select("*").eq("plan_id", savedPlan.id);
+        if (!active) return;
+        const start = parseIso(savedPlan.starts_on);
+        const cells: PlanCell[] = (itemData ?? []).flatMap((item) => {
+          const day = planDayOfDate(start, item.snack_date);
+          if (day < 0 || !item.child_id) return [];
+          return [{ childId: item.child_id, day, snack: item.snack_number, recipeId: item.recipe_id, lunchboxId: item.lunchbox_id, training: item.training_boost }];
+        });
+        if (cells.length) {
+          setWeekStartIso(savedPlan.starts_on);
+          setPeriod(savedPlan.period_type === "month" ? "month" : "week");
+          if (savedPlan.child_id) { setFamilyMode(false); setSelectedChild(savedPlan.child_id); }
+          setPlan(cells);
+        }
+      }
+      setRestoring(false);
     }
+
     load();
     return () => { active = false; };
   }, []);
@@ -224,7 +269,7 @@ function Index() {
   const recipePool = useMemo(() => recipes.filter((r) => pickedRecipes.includes(r.id)), [recipes, pickedRecipes]);
 
   useEffect(() => {
-    if ((!pool.length && !recipes.length) || plan.length) return;
+    if (restoring || (!pool.length && !recipes.length) || plan.length) return;
     type Cand = { id: string; box?: Lunchbox; recipe?: Recipe };
     const next: PlanCell[] = [];
     const rand = <T,>(list: T[]) => list[Math.floor(Math.random() * list.length)];
@@ -232,12 +277,14 @@ function Index() {
     const fitsRecipe = (r: Recipe, age: number, training: boolean) => r.min_age <= age && r.max_age >= age && (!training || r.training_suitable);
     const usedCommon = new Set<string>();
     const yesterdayByChild = new Map<string, Set<string>>();
-    for (let day = 0; day < 5; day++) {
+    const totalDays = period === "month" ? 20 : 5;
+    for (let day = 0; day < totalDays; day++) {
+      const weekday = day % 5;
       let common: Cand | undefined;
       if (familyMode && children.length > 1) {
         const cands: Cand[] = [
-          ...pool.filter((b) => children.every((c) => fits(b, c.age, c.training_days.includes(day)))).map((box) => ({ id: box.id, box })),
-          ...recipePool.filter((r) => children.every((c) => fitsRecipe(r, c.age, c.training_days.includes(day)))).map((recipe) => ({ id: recipe.id, recipe })),
+          ...pool.filter((b) => children.every((c) => fits(b, c.age, c.training_days.includes(weekday)))).map((box) => ({ id: box.id, box })),
+          ...recipePool.filter((r) => children.every((c) => fitsRecipe(r, c.age, c.training_days.includes(weekday)))).map((recipe) => ({ id: recipe.id, recipe })),
         ];
         let fresh = cands.filter((c) => !usedCommon.has(c.id));
         if (!fresh.length) { usedCommon.clear(); fresh = cands; }
@@ -249,7 +296,8 @@ function Index() {
         const yesterday = yesterdayByChild.get(child.id) ?? new Set<string>();
         const todayIds: string[] = [];
         for (let snack = 1; snack <= child.snacks_per_day; snack++) {
-          const training = child.training_days.includes(day);
+          const training = child.training_days.includes(weekday);
+
           const cands: Cand[] = [
             ...pool.filter((b) => fits(b, child.age, training)).map((box) => ({ id: box.id, box })),
             ...recipePool.filter((r) => fitsRecipe(r, child.age, training)).map((recipe) => ({ id: recipe.id, recipe })),
@@ -273,7 +321,7 @@ function Index() {
       });
     }
     setPlan(next);
-  }, [pool, recipePool, recipes, children, familyMode, plan.length, genCount]);
+  }, [pool, recipePool, recipes, children, familyMode, plan.length, genCount, period, restoring]);
 
   const visibleChildren = selectedChild === "all" ? children : children.filter((c) => c.id === selectedChild);
   const shopping = useMemo(() => {
@@ -321,23 +369,35 @@ function Index() {
   async function savePlan() {
     if (!sessionId) { setModal("auth"); return; }
     const chosenChild = selectedChild === "all" ? null : selectedChild;
+    const start = weekStartIso ? parseIso(weekStartIso) : mondayOf();
+    const { data: old } = await supabase.from("meal_plans").select("id").eq("user_id", sessionId);
+    if (old?.length) {
+      const ids = old.map((row) => row.id);
+      await supabase.from("plan_items").delete().in("plan_id", ids);
+      await supabase.from("meal_plans").delete().in("id", ids);
+    }
     const { data: saved, error } = await supabase.from("meal_plans").insert({
       user_id: sessionId,
       title: period === "week" ? "Plano semanal" : "Plano mensal",
       period_type: period,
       plan_mode: chosenChild ? "child" : "family",
       child_id: chosenChild,
-      starts_on: "2026-09-14",
+      starts_on: isoDate(start),
     }).select().single();
     if (error || !saved) { flash("Não foi possível guardar o plano."); return; }
-    const baseDate = new Date("2026-09-14T12:00:00");
-    const rows = plan.map((item) => {
-      const date = new Date(baseDate); date.setDate(date.getDate() + item.day);
-      return { plan_id: saved.id, child_id: item.childId, recipe_id: item.recipeId, lunchbox_id: item.lunchboxId, snack_date: date.toISOString().slice(0,10), snack_number: item.snack, training_boost: item.training };
-    });
+    const rows = plan.map((item) => ({
+      plan_id: saved.id,
+      child_id: item.childId,
+      recipe_id: item.recipeId,
+      lunchbox_id: item.lunchboxId,
+      snack_date: isoDate(dateOfPlanDay(start, item.day)),
+      snack_number: item.snack,
+      training_boost: item.training,
+    }));
     const { error: itemError } = await supabase.from("plan_items").insert(rows);
-    flash(itemError ? "O plano foi criado, mas faltaram alguns lanches." : "Plano guardado com sucesso.");
+    flash(itemError ? "O plano foi criado, mas faltaram alguns lanches." : "Plano guardado — volta a aparecer quando abrir a app.");
   }
+
 
   async function saveImport(result: ImportResult) {
     if (!sessionId) { setModal("auth"); return; }
@@ -411,7 +471,12 @@ function Index() {
 
       <main className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6">
         {notice && <div className="fixed right-5 top-20 z-50 max-w-xs rounded-md bg-foreground px-4 py-3 text-sm text-background shadow-xl">{notice}</div>}
-        {tab === "plano" && <PlanView children={visibleChildren} allChildren={children} recipes={recipes} lunchboxes={lunchboxes} picked={picked} pickedRecipes={pickedRecipes} toggleBox={togglePick} toggleRecipe={toggleRecipe} images={images} setImage={setImage} plan={plan} familyMode={familyMode} selectedChild={selectedChild} setSelectedChild={setSelectedChild} setFamilyMode={setFamilyMode} period={period} setPeriod={setPeriod} regenerate={regenerate} savePlan={savePlan} openLunchboxes={() => setTab("lancheiras")} />}
+        {!sessionId && <div className="mb-6 flex flex-col gap-3 rounded-md border-l-4 border-berry bg-card p-4 text-sm sm:flex-row sm:items-center print:hidden">
+          <p className="flex-1"><b>Está a experimentar sem conta.</b> Os perfis, as escolhas e o plano são apenas de demonstração e desaparecem ao fechar o separador. Entre para guardar tudo.</p>
+          <Button size="sm" onClick={() => setModal("auth")} className="shrink-0"><LogIn size={16}/>Entrar e guardar</Button>
+        </div>}
+        {tab === "plano" && <PlanView children={visibleChildren} allChildren={children} recipes={recipes} lunchboxes={lunchboxes} picked={picked} pickedRecipes={pickedRecipes} toggleBox={togglePick} toggleRecipe={toggleRecipe} images={images} setImage={setImage} plan={plan} familyMode={familyMode} selectedChild={selectedChild} setSelectedChild={setSelectedChild} setFamilyMode={setFamilyMode} period={period} setPeriod={(v)=>{ setPeriod(v); setPlan([]); }} weekStartIso={weekStartIso} regenerate={regenerate} savePlan={savePlan} openLunchboxes={() => setTab("lancheiras")} />}
+
         {tab === "lancheiras" && <LunchboxesView lunchboxes={lunchboxes} recipes={recipes} picked={picked} pickedRecipes={pickedRecipes} toggle={togglePick} toggleRecipe={toggleRecipe} images={images} setImage={(id,url)=>setImage("lunchboxes",id,url)} setRecipeImage={(id,url)=>setImage("recipes",id,url)} openImport={() => setModal("import")} clear={() => { setPicked([]); setPlan([]); if (sessionId) supabase.from("lunchbox_selections").delete().eq("user_id", sessionId); }} />}
         {tab === "receitas" && <RecipesView recipes={recipes} search={search} setSearch={setSearch} images={images} setImage={(id,url)=>setImage("recipes",id,url)} openAdd={() => setModal("recipe")} openImport={() => setModal("import")} picked={pickedRecipes} toggle={toggleRecipe} />}
         {tab === "compras" && <ShoppingView items={shopping} childName={selectedChild === "all" ? "toda a família" : visibleChildren[0]?.name ?? "plano"} />}
@@ -431,11 +496,13 @@ function PageHeading({ eyebrow, title, text, action }: { eyebrow: string; title:
   return <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-extrabold uppercase text-primary">{eyebrow}</p><h1 className="text-4xl sm:text-5xl">{title}</h1><p className="mt-2 max-w-2xl text-muted-foreground">{text}</p></div>{action}</div>;
 }
 
-function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRecipes, toggleBox, toggleRecipe, images, setImage, plan, familyMode, selectedChild, setSelectedChild, setFamilyMode, period, setPeriod, regenerate, savePlan, openLunchboxes }: { children: Child[]; allChildren: Child[]; recipes: Recipe[]; lunchboxes: Lunchbox[]; picked: string[]; pickedRecipes: string[]; toggleBox:(id:string)=>void; toggleRecipe:(id:string)=>void; images: Record<string,string>; setImage:(table:"recipes"|"lunchboxes"|"children",id:string,url:string)=>void; plan: PlanCell[]; familyMode: boolean; selectedChild: string; setSelectedChild:(v:string)=>void; setFamilyMode:(v:boolean)=>void; period:"week"|"month"; setPeriod:(v:"week"|"month")=>void; regenerate:()=>void; savePlan:()=>void; openLunchboxes:()=>void }) {
+function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRecipes, toggleBox, toggleRecipe, images, setImage, plan, familyMode, selectedChild, setSelectedChild, setFamilyMode, period, setPeriod, weekStartIso, regenerate, savePlan, openLunchboxes }: { children: Child[]; allChildren: Child[]; recipes: Recipe[]; lunchboxes: Lunchbox[]; picked: string[]; pickedRecipes: string[]; toggleBox:(id:string)=>void; toggleRecipe:(id:string)=>void; images: Record<string,string>; setImage:(table:"recipes"|"lunchboxes"|"children",id:string,url:string)=>void; plan: PlanCell[]; familyMode: boolean; selectedChild: string; setSelectedChild:(v:string)=>void; setFamilyMode:(v:boolean)=>void; period:"week"|"month"; setPeriod:(v:"week"|"month")=>void; weekStartIso: string; regenerate:()=>void; savePlan:()=>void; openLunchboxes:()=>void }) {
   const [open, setOpen] = useState<{ kind: "box" | "recipe"; id: string } | null>(null);
   const [day, setDay] = useState(0);
+  const [weekIndex, setWeekIndex] = useState(0);
   const [actionsOpen, setActionsOpen] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { setWeekIndex(0); setDay(0); }, [period]);
   useEffect(() => {
     if (!actionsOpen) return;
     const handler = (e: MouseEvent) => {
@@ -449,11 +516,22 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
   const fallbacks = [lunchbox.url, fruitBoxes.url, muffins.url];
   const imageFor = (id: string, stored: string | null | undefined, i: number) => images[id] || stored || fallbacks[i % 3] || lunchbox.url;
   const nameOf = (cell: PlanCell) => lunchboxes.find((x) => x.id === cell.lunchboxId)?.name ?? recipes.find((x) => x.id === cell.recipeId)?.name ?? "";
+  const weeks = period === "month" ? 4 : 1;
+  const start = weekStartIso ? parseIso(weekStartIso) : mondayOf();
+  const dateAt = (weekday: number, w = weekIndex) => addDays(start, w * 7 + weekday);
+  const dayIndex = (weekday: number, w = weekIndex) => w * 5 + weekday;
+  const rangeLabel = (w: number) => `${shortLabel(dateAt(0, w))} – ${shortLabel(dateAt(4, w))}`;
+  const cellsFor = (childId: string, weekday: number, w = weekIndex) => plan.filter((p) => p.childId === childId && p.day === dayIndex(weekday, w));
   function exportCsv() {
-    const rows = [["Criança", ...weekDays].join(";")];
-    for (const child of children) {
-      const cols = weekDays.map((_, d) => plan.filter((p) => p.childId === child.id && p.day === d).map((c) => `Lanche ${c.snack}: ${nameOf(c)}`).join(" | "));
-      rows.push([child.name, ...cols].join(";"));
+    const rows: string[] = [];
+    for (let w = 0; w < weeks; w++) {
+      rows.push(`Semana ${w + 1} (${rangeLabel(w)})`);
+      rows.push(["Criança", ...weekDays.map((d, i) => `${d} ${shortLabel(dateAt(i, w))}`)].join(";"));
+      for (const child of children) {
+        const cols = weekDays.map((_, i) => cellsFor(child.id, i, w).map((c) => `Lanche ${c.snack}: ${nameOf(c)}`).join(" | "));
+        rows.push([child.name, ...cols].join(";"));
+      }
+      rows.push("");
     }
     const url = URL.createObjectURL(new Blob(["\uFEFF" + rows.join("\n")], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
@@ -461,28 +539,27 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
     URL.revokeObjectURL(url);
   }
   function shareWhatsApp() {
-    const lines = ["*Plano de lancheiras — semana de 14 a 18 de setembro*"];
+    const lines = [`*Plano de lancheiras — ${rangeLabel(weekIndex)}*`];
     for (const child of children) {
       lines.push("", `*${child.name}*`);
       weekDays.forEach((d, i) => {
-        const cells = plan.filter((p) => p.childId === child.id && p.day === i);
-        if (cells.length) lines.push(`${d}: ${cells.map((c) => `Lanche ${c.snack} — ${nameOf(c)}`).join(" · ")}`);
+        const cells = cellsFor(child.id, i);
+        if (cells.length) lines.push(`${d} ${shortLabel(dateAt(i))}: ${cells.map((c) => `Lanche ${c.snack} — ${nameOf(c)}`).join(" · ")}`);
       });
     }
     window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
   }
-  return <section><PageHeading eyebrow={period === "week" ? "Semana de 14 a 18 de setembro" : "Setembro de 2026 · 4 semanas"} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana equilibrada" : "Um mês equilibrado"}, adaptado a cada idade e aos dias com mais energia. Toque num lanche para ver os detalhes.`}/>
-    <div className="mb-6 print:hidden">
+  return <section><PageHeading eyebrow={period === "week" ? `Semana de ${rangeLabel(0)}` : `4 semanas · ${shortLabel(dateAt(0, 0))} a ${shortLabel(dateAt(4, 3))}`} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana equilibrada" : "Um mês equilibrado"}, adaptado a cada idade e aos dias com mais energia. Toque num lanche para ver os detalhes.`}/>
+    <div className="mb-6 flex flex-wrap items-center gap-3 print:hidden">
+      <Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button>
       <div ref={actionsRef} className="relative inline-block">
-        <Button variant="outline" onClick={() => setActionsOpen((v) => !v)} aria-expanded={actionsOpen} aria-haspopup="menu"><CalendarDays size={17}/>Ações do plano</Button>
+        <Button variant="outline" onClick={() => setActionsOpen((v) => !v)} aria-expanded={actionsOpen} aria-haspopup="menu"><FileUp size={17}/>Guardar e partilhar</Button>
         {actionsOpen && (
-          <div className="absolute left-1/2 top-full z-50 mt-1 w-52 -translate-x-1/2 rounded-md border border-border bg-background py-1 shadow-xl" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="absolute left-0 top-full z-50 mt-1 w-52 rounded-md border border-border bg-background py-1 shadow-xl" onMouseDown={(e) => e.stopPropagation()}>
+            <button onClick={() => { savePlan(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><Check size={15}/>Guardar plano</button>
             <button onClick={() => { exportCsv(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><FileUp size={15}/>Exportar CSV</button>
             <button onClick={() => { window.print(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><CalendarDays size={15}/>Imprimir</button>
             <button onClick={() => { shareWhatsApp(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><MessageCircle size={15}/>WhatsApp</button>
-            <button onClick={() => { savePlan(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><Check size={15}/>Guardar</button>
-            <div className="my-1 border-t border-border" />
-            <button onClick={() => { regenerate(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold text-primary hover:bg-muted"><Sparkles size={15}/>Gerar novo plano</button>
           </div>
         )}
       </div>
@@ -494,7 +571,8 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
       {picked.length ? <button onClick={openLunchboxes} className="rounded-full bg-leaf-soft px-3 py-2 text-xs font-bold text-primary">{picked.length} lancheiras escolhidas · alterar</button> : <button onClick={openLunchboxes} className="rounded-full border border-border px-3 py-2 text-xs font-bold text-muted-foreground">Escolher lancheiras para o plano</button>}
       <p className="text-sm text-muted-foreground">No plano agregado, repetimos lanches adequados para poupar preparação.</p>
     </div>
-    {period === "month" && <div className="mb-5 grid grid-cols-4 gap-2">{[1,2,3,4].map((week)=><button key={week} className={`rounded-md border p-3 text-left text-sm ${week===1?'border-primary bg-leaf-soft':'border-border bg-card'}`} onClick={()=>setPeriod("week")}><b>Semana {week}</b><span className="block text-xs text-muted-foreground">{week===1?'14–18 set':week===2?'21–25 set':week===3?'28 set–2 out':'5–9 out'}</span></button>)}</div>}
+    {period === "month" && <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">{[0,1,2,3].map((w)=><button key={w} className={`rounded-md border p-3 text-left text-sm ${w===weekIndex?'border-primary bg-leaf-soft':'border-border bg-card'}`} onClick={()=>{setWeekIndex(w);setDay(0);}}><b>Semana {w+1}</b><span className="block text-xs text-muted-foreground">{rangeLabel(w)}</span></button>)}</div>}
+
     {(() => {
       const snackPill = (cell: PlanCell) => {
         const box = lunchboxes.find((x) => x.id === cell.lunchboxId);
@@ -520,10 +598,10 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
 
       return <>
         <div className="md:hidden print:hidden">
-          <div className="mb-4 flex gap-2 overflow-x-auto">{weekDays.map((d, i) => <Button key={d} size="sm" variant={day === i ? "secondary" : "ghost"} onClick={() => setDay(i)} className="shrink-0">{d}<span className="ml-1 text-xs text-muted-foreground">{14 + i}</span></Button>)}</div>
-          <p className="mb-3 text-sm font-bold">{fullDays[day]}, {14 + day} de setembro</p>
+          <div className="mb-4 flex gap-2 overflow-x-auto">{weekDays.map((d, i) => <Button key={d} size="sm" variant={day === i ? "secondary" : "ghost"} onClick={() => setDay(i)} className="shrink-0">{d}<span className="ml-1 text-xs text-muted-foreground">{dateAt(i).getDate()}</span></Button>)}</div>
+          <p className="mb-3 text-sm font-bold">{fullDays[day]}, {shortLabel(dateAt(day))}</p>
           <div className="space-y-4">{children.map((child) => {
-            const cells = plan.filter((p) => p.childId === child.id && p.day === day);
+            const cells = cellsFor(child.id, day);
             return <article key={child.id} className="rounded-md border border-border bg-card p-4">
               <div className="mb-3 flex items-center gap-3"><span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full bg-leaf-soft font-bold text-primary">{images[child.id] ? <img src={images[child.id]} alt="" className="size-full object-cover"/> : child.name[0]}</span><span className="min-w-0"><b className="block truncate">{child.name}</b><span className="text-xs text-muted-foreground">{child.age} anos · {child.snacks_per_day} {child.snacks_per_day === 1 ? "lanche" : "lanches"}</span></span>{child.training_days.includes(day) && <span className="ml-auto shrink-0 rounded-full bg-accent px-2 py-1 text-[11px] font-bold text-accent-foreground"><Dumbbell size={11} className="mr-1 inline"/>treino</span>}</div>
               {cells.length ? cells.map((cell) => snackPill(cell)) : <p className="text-sm text-muted-foreground">Sem lanche definido para este dia.</p>}
@@ -531,11 +609,17 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
           })}</div>
         </div>
 
-        <div className="hidden overflow-x-auto border-y border-border bg-card md:block print:block"><div className="grid min-w-[880px] grid-cols-[150px_repeat(5,minmax(145px,1fr))]">
-          <div className="border-b border-r border-border p-4 text-sm font-bold text-muted-foreground">Criança</div>{weekDays.map((d,i)=><div key={d} className="border-b border-r border-border p-4"><b>{d}</b><span className="ml-2 text-xs text-muted-foreground">{14+i} set</span></div>)}
-          {children.map((child)=><div className="contents" key={child.id}><div className="border-b border-r border-border p-4"><div className="mb-1 grid size-10 place-items-center overflow-hidden rounded-full bg-leaf-soft font-bold text-primary">{images[child.id]?<img src={images[child.id]} alt="" className="size-full object-cover"/>:child.name[0]}</div><b>{child.name}</b><p className="text-xs text-muted-foreground">{child.age} anos · {child.snacks_per_day} {child.snacks_per_day===1?'lanche':'lanches'}</p></div>{weekDays.map((_,d)=>{const cells=plan.filter((p)=>p.childId===child.id&&p.day===d);return <div key={d} className="min-h-44 border-b border-r border-border p-3 align-top">{cells.map((cell)=>snackPill(cell))}{child.training_days.includes(d)&&<span className="text-[11px] font-bold text-berry">Dia de treino · reforçado</span>}</div>})}</div>)}
-        </div></div>
+        {Array.from({ length: weeks }, (_, w) => (
+          <div key={w} className={`${w === weekIndex ? "hidden md:block" : "hidden"} overflow-x-auto border-y border-border bg-card print:block`}>
+            {weeks > 1 && <p className="px-4 py-2 text-sm font-bold">Semana {w + 1} · {rangeLabel(w)}</p>}
+            <div className="grid min-w-[880px] grid-cols-[150px_repeat(5,minmax(145px,1fr))]">
+              <div className="border-b border-r border-border p-4 text-sm font-bold text-muted-foreground">Criança</div>{weekDays.map((d,i)=><div key={d} className="border-b border-r border-border p-4"><b>{d}</b><span className="ml-2 text-xs text-muted-foreground">{shortLabel(dateAt(i, w))}</span></div>)}
+              {children.map((child)=><div className="contents" key={child.id}><div className="border-b border-r border-border p-4"><div className="mb-1 grid size-10 place-items-center overflow-hidden rounded-full bg-leaf-soft font-bold text-primary">{images[child.id]?<img src={images[child.id]} alt="" className="size-full object-cover"/>:child.name[0]}</div><b>{child.name}</b><p className="text-xs text-muted-foreground">{child.age} anos · {child.snacks_per_day} {child.snacks_per_day===1?'lanche':'lanches'}</p></div>{weekDays.map((_,d)=>{const cells=cellsFor(child.id,d,w);return <div key={d} className="min-h-44 border-b border-r border-border p-3 align-top">{cells.map((cell)=>snackPill(cell))}{child.training_days.includes(d)&&<span className="text-[11px] font-bold text-berry">Dia de treino · reforçado</span>}</div>})}</div>)}
+            </div>
+          </div>
+        ))}
       </>;
+
     })()}
     {openBox && <LunchboxDetail box={openBox} image={imageFor(openBox.id, openBox.image_url, 0)} setImage={(url)=>setImage("lunchboxes",openBox.id,url)} picked={picked.includes(openBox.id)} toggle={()=>toggleBox(openBox.id)} close={()=>setOpen(null)} recipes={recipes} openRecipe={(id)=>setOpen({kind:"recipe",id})}/>}
     {openRecipe && <RecipeDetail recipe={openRecipe} image={imageFor(openRecipe.id, openRecipe.image_url, 1)} setImage={(url)=>setImage("recipes",openRecipe.id,url)} picked={pickedRecipes.includes(openRecipe.id)} toggle={()=>toggleRecipe(openRecipe.id)} close={()=>setOpen(null)}/>}

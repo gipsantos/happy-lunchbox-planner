@@ -384,11 +384,20 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, plan, fa
 
 function LunchboxesView({ lunchboxes, picked, toggle, images, setImage, openImport, clear }: { lunchboxes: Lunchbox[]; picked: string[]; toggle:(id:string)=>void; images: Record<string,string>; setImage:(id:string,url:string)=>void; openImport:()=>void; clear:()=>void }) {
   const [filter, setFilter] = useState<"todas" | "sem-receita" | "treino" | "escolhidas">("todas");
-  const shown = lunchboxes.filter((b) => filter === "todas" || (filter === "sem-receita" ? itemsOf(b).every((i) => i.kind === "bought") : filter === "treino" ? b.training_suitable : picked.includes(b.id)));
+  const [q, setQ] = useState("");
+  const shown = lunchboxes.filter((b) => {
+    if (filter !== "todas" && !(filter === "sem-receita" ? itemsOf(b).every((i) => i.kind === "bought") : filter === "treino" ? b.training_suitable : picked.includes(b.id))) return false;
+    if (!q.trim()) return true;
+    const hay = [b.name, b.description, ...itemsOf(b).map((i) => i.label), ...ingredientsOf(b.ingredients).map((i) => i.name)].join(" ").toLowerCase();
+    return q.trim().toLowerCase().split(/\s+/).every((word) => hay.includes(word));
+  });
   return <section>
     <PageHeading eyebrow={`${lunchboxes.length} sugestões · ${picked.length} escolhidas`} title="Lancheiras completas" text="Sugestões prontas de lanche completo, com ou sem receita. Escolha as que quer no plano semanal." action={<div className="flex gap-2">{picked.length>0&&<Button variant="ghost" onClick={clear}>Limpar escolhas</Button>}<Button variant="outline" onClick={openImport}><FileUp size={17}/>Importar documento</Button></div>}/>
-    <div className="mb-6 inline-flex flex-wrap gap-1 rounded-md border border-border bg-card p-1">
-      {([["todas","Todas"],["sem-receita","Sem preparação"],["treino","Dias de treino"],["escolhidas","Escolhidas"]] as const).map(([id,label])=><Button key={id} size="sm" variant={filter===id?"secondary":"ghost"} onClick={()=>setFilter(id)}>{label}</Button>)}
+    <div className="mb-6 flex flex-wrap items-center gap-3">
+      <div className="relative max-w-md flex-1"><Search className="absolute left-3 top-3 text-muted-foreground" size={18}/><input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Pesquisar por nome ou ingrediente…" className="h-11 w-full rounded-md border border-input bg-card pl-10 pr-4"/></div>
+      <div className="inline-flex flex-wrap gap-1 rounded-md border border-border bg-card p-1">
+        {([["todas","Todas"],["sem-receita","Sem preparação"],["treino","Dias de treino"],["escolhidas","Escolhidas"]] as const).map(([id,label])=><Button key={id} size="sm" variant={filter===id?"secondary":"ghost"} onClick={()=>setFilter(id)}>{label}</Button>)}
+      </div>
     </div>
     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{shown.map((b,i)=>{const active=picked.includes(b.id);const items=itemsOf(b);const thumb=images[b.id]||[lunchbox.url,fruitBoxes.url,muffins.url][i%3];return <article key={b.id} className={`rounded-md border bg-card p-5 ${active?"border-primary ring-2 ring-primary/30":"border-border"}`}>
       <div className="mb-3 flex items-start gap-3">

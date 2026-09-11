@@ -496,11 +496,13 @@ function PageHeading({ eyebrow, title, text, action }: { eyebrow: string; title:
   return <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-extrabold uppercase text-primary">{eyebrow}</p><h1 className="text-4xl sm:text-5xl">{title}</h1><p className="mt-2 max-w-2xl text-muted-foreground">{text}</p></div>{action}</div>;
 }
 
-function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRecipes, toggleBox, toggleRecipe, images, setImage, plan, familyMode, selectedChild, setSelectedChild, setFamilyMode, period, setPeriod, regenerate, savePlan, openLunchboxes }: { children: Child[]; allChildren: Child[]; recipes: Recipe[]; lunchboxes: Lunchbox[]; picked: string[]; pickedRecipes: string[]; toggleBox:(id:string)=>void; toggleRecipe:(id:string)=>void; images: Record<string,string>; setImage:(table:"recipes"|"lunchboxes"|"children",id:string,url:string)=>void; plan: PlanCell[]; familyMode: boolean; selectedChild: string; setSelectedChild:(v:string)=>void; setFamilyMode:(v:boolean)=>void; period:"week"|"month"; setPeriod:(v:"week"|"month")=>void; regenerate:()=>void; savePlan:()=>void; openLunchboxes:()=>void }) {
+function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRecipes, toggleBox, toggleRecipe, images, setImage, plan, familyMode, selectedChild, setSelectedChild, setFamilyMode, period, setPeriod, weekStartIso, regenerate, savePlan, openLunchboxes }: { children: Child[]; allChildren: Child[]; recipes: Recipe[]; lunchboxes: Lunchbox[]; picked: string[]; pickedRecipes: string[]; toggleBox:(id:string)=>void; toggleRecipe:(id:string)=>void; images: Record<string,string>; setImage:(table:"recipes"|"lunchboxes"|"children",id:string,url:string)=>void; plan: PlanCell[]; familyMode: boolean; selectedChild: string; setSelectedChild:(v:string)=>void; setFamilyMode:(v:boolean)=>void; period:"week"|"month"; setPeriod:(v:"week"|"month")=>void; weekStartIso: string; regenerate:()=>void; savePlan:()=>void; openLunchboxes:()=>void }) {
   const [open, setOpen] = useState<{ kind: "box" | "recipe"; id: string } | null>(null);
   const [day, setDay] = useState(0);
+  const [weekIndex, setWeekIndex] = useState(0);
   const [actionsOpen, setActionsOpen] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { setWeekIndex(0); setDay(0); }, [period]);
   useEffect(() => {
     if (!actionsOpen) return;
     const handler = (e: MouseEvent) => {
@@ -514,11 +516,22 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
   const fallbacks = [lunchbox.url, fruitBoxes.url, muffins.url];
   const imageFor = (id: string, stored: string | null | undefined, i: number) => images[id] || stored || fallbacks[i % 3] || lunchbox.url;
   const nameOf = (cell: PlanCell) => lunchboxes.find((x) => x.id === cell.lunchboxId)?.name ?? recipes.find((x) => x.id === cell.recipeId)?.name ?? "";
+  const weeks = period === "month" ? 4 : 1;
+  const start = weekStartIso ? parseIso(weekStartIso) : mondayOf();
+  const dateAt = (weekday: number, w = weekIndex) => addDays(start, w * 7 + weekday);
+  const dayIndex = (weekday: number, w = weekIndex) => w * 5 + weekday;
+  const rangeLabel = (w: number) => `${shortLabel(dateAt(0, w))} – ${shortLabel(dateAt(4, w))}`;
+  const cellsFor = (childId: string, weekday: number, w = weekIndex) => plan.filter((p) => p.childId === childId && p.day === dayIndex(weekday, w));
   function exportCsv() {
-    const rows = [["Criança", ...weekDays].join(";")];
-    for (const child of children) {
-      const cols = weekDays.map((_, d) => plan.filter((p) => p.childId === child.id && p.day === d).map((c) => `Lanche ${c.snack}: ${nameOf(c)}`).join(" | "));
-      rows.push([child.name, ...cols].join(";"));
+    const rows: string[] = [];
+    for (let w = 0; w < weeks; w++) {
+      rows.push(`Semana ${w + 1} (${rangeLabel(w)})`);
+      rows.push(["Criança", ...weekDays.map((d, i) => `${d} ${shortLabel(dateAt(i, w))}`)].join(";"));
+      for (const child of children) {
+        const cols = weekDays.map((_, i) => cellsFor(child.id, i, w).map((c) => `Lanche ${c.snack}: ${nameOf(c)}`).join(" | "));
+        rows.push([child.name, ...cols].join(";"));
+      }
+      rows.push("");
     }
     const url = URL.createObjectURL(new Blob(["\uFEFF" + rows.join("\n")], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
@@ -526,28 +539,27 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
     URL.revokeObjectURL(url);
   }
   function shareWhatsApp() {
-    const lines = ["*Plano de lancheiras — semana de 14 a 18 de setembro*"];
+    const lines = [`*Plano de lancheiras — ${rangeLabel(weekIndex)}*`];
     for (const child of children) {
       lines.push("", `*${child.name}*`);
       weekDays.forEach((d, i) => {
-        const cells = plan.filter((p) => p.childId === child.id && p.day === i);
-        if (cells.length) lines.push(`${d}: ${cells.map((c) => `Lanche ${c.snack} — ${nameOf(c)}`).join(" · ")}`);
+        const cells = cellsFor(child.id, i);
+        if (cells.length) lines.push(`${d} ${shortLabel(dateAt(i))}: ${cells.map((c) => `Lanche ${c.snack} — ${nameOf(c)}`).join(" · ")}`);
       });
     }
     window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
   }
-  return <section><PageHeading eyebrow={period === "week" ? "Semana de 14 a 18 de setembro" : "Setembro de 2026 · 4 semanas"} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana equilibrada" : "Um mês equilibrado"}, adaptado a cada idade e aos dias com mais energia. Toque num lanche para ver os detalhes.`}/>
-    <div className="mb-6 print:hidden">
+  return <section><PageHeading eyebrow={period === "week" ? `Semana de ${rangeLabel(0)}` : `4 semanas · ${shortLabel(dateAt(0, 0))} a ${shortLabel(dateAt(4, 3))}`} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana equilibrada" : "Um mês equilibrado"}, adaptado a cada idade e aos dias com mais energia. Toque num lanche para ver os detalhes.`}/>
+    <div className="mb-6 flex flex-wrap items-center gap-3 print:hidden">
+      <Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button>
       <div ref={actionsRef} className="relative inline-block">
-        <Button variant="outline" onClick={() => setActionsOpen((v) => !v)} aria-expanded={actionsOpen} aria-haspopup="menu"><CalendarDays size={17}/>Ações do plano</Button>
+        <Button variant="outline" onClick={() => setActionsOpen((v) => !v)} aria-expanded={actionsOpen} aria-haspopup="menu"><FileUp size={17}/>Guardar e partilhar</Button>
         {actionsOpen && (
-          <div className="absolute left-1/2 top-full z-50 mt-1 w-52 -translate-x-1/2 rounded-md border border-border bg-background py-1 shadow-xl" onMouseDown={(e) => e.stopPropagation()}>
+          <div className="absolute left-0 top-full z-50 mt-1 w-52 rounded-md border border-border bg-background py-1 shadow-xl" onMouseDown={(e) => e.stopPropagation()}>
+            <button onClick={() => { savePlan(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><Check size={15}/>Guardar plano</button>
             <button onClick={() => { exportCsv(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><FileUp size={15}/>Exportar CSV</button>
             <button onClick={() => { window.print(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><CalendarDays size={15}/>Imprimir</button>
             <button onClick={() => { shareWhatsApp(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><MessageCircle size={15}/>WhatsApp</button>
-            <button onClick={() => { savePlan(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><Check size={15}/>Guardar</button>
-            <div className="my-1 border-t border-border" />
-            <button onClick={() => { regenerate(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold text-primary hover:bg-muted"><Sparkles size={15}/>Gerar novo plano</button>
           </div>
         )}
       </div>
@@ -559,7 +571,8 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
       {picked.length ? <button onClick={openLunchboxes} className="rounded-full bg-leaf-soft px-3 py-2 text-xs font-bold text-primary">{picked.length} lancheiras escolhidas · alterar</button> : <button onClick={openLunchboxes} className="rounded-full border border-border px-3 py-2 text-xs font-bold text-muted-foreground">Escolher lancheiras para o plano</button>}
       <p className="text-sm text-muted-foreground">No plano agregado, repetimos lanches adequados para poupar preparação.</p>
     </div>
-    {period === "month" && <div className="mb-5 grid grid-cols-4 gap-2">{[1,2,3,4].map((week)=><button key={week} className={`rounded-md border p-3 text-left text-sm ${week===1?'border-primary bg-leaf-soft':'border-border bg-card'}`} onClick={()=>setPeriod("week")}><b>Semana {week}</b><span className="block text-xs text-muted-foreground">{week===1?'14–18 set':week===2?'21–25 set':week===3?'28 set–2 out':'5–9 out'}</span></button>)}</div>}
+    {period === "month" && <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">{[0,1,2,3].map((w)=><button key={w} className={`rounded-md border p-3 text-left text-sm ${w===weekIndex?'border-primary bg-leaf-soft':'border-border bg-card'}`} onClick={()=>{setWeekIndex(w);setDay(0);}}><b>Semana {w+1}</b><span className="block text-xs text-muted-foreground">{rangeLabel(w)}</span></button>)}</div>}
+
     {(() => {
       const snackPill = (cell: PlanCell) => {
         const box = lunchboxes.find((x) => x.id === cell.lunchboxId);

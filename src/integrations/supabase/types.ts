@@ -50,6 +50,86 @@ export type Database = {
         }
         Relationships: []
       }
+      lunchbox_selections: {
+        Row: {
+          created_at: string
+          id: string
+          lunchbox_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          lunchbox_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          lunchbox_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lunchbox_selections_lunchbox_id_fkey"
+            columns: ["lunchbox_id"]
+            isOneToOne: false
+            referencedRelation: "lunchboxes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lunchboxes: {
+        Row: {
+          components: string[]
+          created_at: string
+          description: string
+          id: string
+          ingredients: Json
+          items: Json
+          max_age: number
+          min_age: number
+          name: string
+          needs_prep: boolean
+          source: string
+          training_suitable: boolean
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          components?: string[]
+          created_at?: string
+          description?: string
+          id?: string
+          ingredients?: Json
+          items?: Json
+          max_age?: number
+          min_age?: number
+          name: string
+          needs_prep?: boolean
+          source?: string
+          training_suitable?: boolean
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          components?: string[]
+          created_at?: string
+          description?: string
+          id?: string
+          ingredients?: Json
+          items?: Json
+          max_age?: number
+          min_age?: number
+          name?: string
+          needs_prep?: boolean
+          source?: string
+          training_suitable?: boolean
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       meal_plans: {
         Row: {
           child_id: string | null
@@ -99,8 +179,9 @@ export type Database = {
           child_id: string | null
           created_at: string
           id: string
+          lunchbox_id: string | null
           plan_id: string
-          recipe_id: string
+          recipe_id: string | null
           snack_date: string
           snack_number: number
           training_boost: boolean
@@ -109,8 +190,9 @@ export type Database = {
           child_id?: string | null
           created_at?: string
           id?: string
+          lunchbox_id?: string | null
           plan_id: string
-          recipe_id: string
+          recipe_id?: string | null
           snack_date: string
           snack_number?: number
           training_boost?: boolean
@@ -119,8 +201,9 @@ export type Database = {
           child_id?: string | null
           created_at?: string
           id?: string
+          lunchbox_id?: string | null
           plan_id?: string
-          recipe_id?: string
+          recipe_id?: string | null
           snack_date?: string
           snack_number?: number
           training_boost?: boolean
@@ -131,6 +214,13 @@ export type Database = {
             columns: ["child_id"]
             isOneToOne: false
             referencedRelation: "children"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "plan_items_lunchbox_id_fkey"
+            columns: ["lunchbox_id"]
+            isOneToOne: false
+            referencedRelation: "lunchboxes"
             referencedColumns: ["id"]
           },
           {

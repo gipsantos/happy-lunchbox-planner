@@ -314,7 +314,7 @@ function Index() {
       <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-border bg-background p-2 md:hidden">
         {tabs.map(([id,label,Icon]) => <Button key={id} variant="ghost" className={tab === id ? "text-primary" : ""} onClick={() => setTab(id)}><span className="flex flex-col items-center text-xs"><Icon size={18}/>{label}</span></Button>)}
       </nav>
-      {modal && <Modal title={modal === "child" ? "Adicionar criança" : modal === "recipe" ? "Nova receita" : modal === "import" ? "Importar plano ou receitas" : "Guardar os meus planos"} close={() => setModal(null)}>{modal === "child" ? <ChildForm submit={addChild}/> : modal === "recipe" ? <RecipeForm submit={addRecipe}/> : modal === "import" ? <ImportForm save={saveImport} signedIn={Boolean(sessionId)} askLogin={() => setModal("auth")}/> : <AuthForm submit={authenticate} google={googleLogin} mode={authMode} setMode={setAuthMode}/>}</Modal>}
+      {modal && <Modal title={modal === "child" ? (editingChild ? `Editar ${editingChild.name}` : "Adicionar criança") : modal === "recipe" ? "Nova receita" : modal === "import" ? "Importar plano ou receitas" : "Guardar os meus planos"} close={() => { setModal(null); setEditingChild(null); }}>{modal === "child" ? <ChildForm submit={addChild} child={editingChild}/> : modal === "recipe" ? <RecipeForm submit={addRecipe}/> : modal === "import" ? <ImportForm save={saveImport} signedIn={Boolean(sessionId)} askLogin={() => setModal("auth")}/> : <AuthForm submit={authenticate} google={googleLogin} mode={authMode} setMode={setAuthMode}/>}</Modal>}
     </div>
   );
 }

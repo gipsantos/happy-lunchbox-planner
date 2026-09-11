@@ -1,10 +1,23 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+const num = (fallback: number) =>
+  z.preprocess((v) => {
+    if (typeof v === "number") return v;
+    if (typeof v === "string") {
+      const parsed = Number.parseFloat(v.replace(",", "."));
+      return Number.isFinite(parsed) ? parsed : fallback;
+    }
+    return fallback;
+  }, z.number()).catch(fallback);
+
+const text = (fallback: string) => z.preprocess((v) => (typeof v === "string" ? v : fallback), z.string()).catch(fallback);
+const flag = z.preprocess((v) => (typeof v === "boolean" ? v : v === "true" || v === "sim"), z.boolean()).catch(false);
+
 const ingredientSchema = z.object({
   name: z.string(),
-  quantity: z.number().default(1),
-  unit: z.string().default("un"),
+  quantity: num(1).default(1),
+  unit: text("un").default("un"),
 });
 
 const importSchema = z.object({
@@ -12,16 +25,16 @@ const importSchema = z.object({
     .array(
       z.object({
         name: z.string(),
-        description: z.string().default(""),
-        min_age: z.number().default(3),
-        max_age: z.number().default(18),
-        prep_minutes: z.number().default(15),
-        portions: z.number().default(4),
+        description: text("").default(""),
+        min_age: num(3).default(3),
+        max_age: num(18).default(18),
+        prep_minutes: num(15).default(15),
+        portions: num(4).default(4),
         ingredients: z.array(ingredientSchema).default([]),
         instructions: z.array(z.string()).default([]),
         meal_components: z.array(z.string()).default([]),
-        training_suitable: z.boolean().default(false),
-        freezable: z.boolean().default(false),
+        training_suitable: flag.default(false),
+        freezable: flag.default(false),
       }),
     )
     .default([]),
@@ -29,16 +42,16 @@ const importSchema = z.object({
     .array(
       z.object({
         name: z.string(),
-        description: z.string().default(""),
-        min_age: z.number().default(3),
-        max_age: z.number().default(18),
+        description: text("").default(""),
+        min_age: num(3).default(3),
+        max_age: num(18).default(18),
         components: z.array(z.string()).default([]),
         items: z
           .array(z.object({ label: z.string(), kind: z.enum(["recipe", "bought"]).default("bought") }))
           .default([]),
         ingredients: z.array(ingredientSchema).default([]),
-        training_suitable: z.boolean().default(false),
-        needs_prep: z.boolean().default(false),
+        training_suitable: flag.default(false),
+        needs_prep: flag.default(false),
       }),
     )
     .default([]),
@@ -90,5 +103,10 @@ export const importPlanText = createServerFn({ method: "POST" })
     const payload = (await response.json()) as { choices?: { message?: { content?: string } }[] };
     const content = payload.choices?.[0]?.message?.content ?? "{}";
     const cleaned = content.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-    return importSchema.parse(JSON.parse(cleaned));
+    const parsed = importSchema.safeParse(JSON.parse(cleaned));
+    if (!parsed.success) {
+      console.error("[import] schema mismatch", JSON.stringify(parsed.error.issues).slice(0, 600));
+      throw new Error("Conseguimos ler o documento, mas o formato não foi reconhecido. Tente simplificar o texto.");
+    }
+    return parsed.data;
   });

@@ -89,7 +89,12 @@ function useView(key: string) {
   return [view, (v: "cards" | "lista") => { setView(v); localStorage.setItem(key, v); }] as const;
 }
 
-function LunchboxDetail({ box, image, setImage, picked, toggle, close }: { box: Lunchbox; image: string; setImage:(url:string)=>void; picked:boolean; toggle:()=>void; close:()=>void }) {
+function findRecipeForItem(recipes: Recipe[], label: string) {
+  const l = label.toLowerCase();
+  return recipes.find((r) => l.includes(r.name.toLowerCase()) || r.name.toLowerCase().includes(l)) ?? null;
+}
+
+function LunchboxDetail({ box, image, setImage, picked, toggle, close, recipes, openRecipe }: { box: Lunchbox; image: string; setImage:(url:string)=>void; picked:boolean; toggle:()=>void; close:()=>void; recipes: Recipe[]; openRecipe?:(id:string)=>void }) {
   return <Modal title={box.name} close={close}>
     <div className="relative mb-5"><img src={image} alt={box.name} className="max-h-48 w-full rounded-md object-cover"/><ImagePicker label="Alterar imagem" className="absolute bottom-3 right-3 w-40" onPick={setImage}/></div>
     <p className="mb-4 text-sm text-muted-foreground">{box.description}</p>

@@ -95,11 +95,18 @@ function Index() {
     window.setTimeout(() => setNotice(""), 4000);
   }
 
-  async function setImage(table: "recipes" | "lunchboxes", id: string, dataUrl: string) {
+  async function setImage(table: "recipes" | "lunchboxes" | "children", id: string, dataUrl: string) {
     setImages((old) => ({ ...old, [id]: dataUrl }));
     if (!sessionId) { flash("Entre na sua conta para guardar a imagem."); return; }
-    const { error } = await supabase.from(table).update({ image_url: dataUrl }).eq("id", id);
-    flash(error ? "A imagem aparece agora, mas não ficou guardada (sugestão da app)." : "Imagem atualizada.");
+    const column = table === "children" ? "photo_url" : "image_url";
+    const { error } = await supabase.from(table).update({ [column]: dataUrl } as never).eq("id", id);
+    flash(error ? "A imagem aparece agora, mas não ficou guardada nesta sugestão da app." : "Imagem atualizada.");
+  }
+
+  async function removeChild(id: string) {
+    setChildren((old) => old.filter((c) => c.id !== id));
+    setPlan([]);
+    if (sessionId) await supabase.from("children").delete().eq("id", id);
   }
 
   useEffect(() => {

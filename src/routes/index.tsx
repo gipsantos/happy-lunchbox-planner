@@ -45,69 +45,111 @@ function Index() {
   const [tab, setTab] = useState<Tab>("plano");
   const [children, setChildren] = useState<Child[]>(demoChildren);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [lunchboxes, setLunchboxes] = useState<Lunchbox[]>([]);
+  const [picked, setPicked] = useState<string[]>([]);
   const [plan, setPlan] = useState<PlanCell[]>([]);
   const [familyMode, setFamilyMode] = useState(true);
   const [period, setPeriod] = useState<"week" | "month">("week");
   const [selectedChild, setSelectedChild] = useState("all");
-  const [modal, setModal] = useState<"child" | "recipe" | "auth" | null>(null);
+  const [modal, setModal] = useState<"child" | "recipe" | "auth" | "import" | null>(null);
   const [search, setSearch] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [notice, setNotice] = useState("");
 
+  function flash(message: string) {
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 4000);
+  }
+
   useEffect(() => {
     let active = true;
     async function load() {
-      const [{ data: recipeData }, { data: auth }] = await Promise.all([
+      const [{ data: recipeData }, { data: boxData }, { data: auth }] = await Promise.all([
         supabase.from("recipes").select("*").order("created_at"),
+        supabase.from("lunchboxes").select("*").order("created_at"),
         supabase.auth.getUser(),
       ]);
       if (!active) return;
       if (recipeData) setRecipes(recipeData);
+      if (boxData) setLunchboxes(boxData);
       if (auth.user) {
         setSessionId(auth.user.id);
-        const { data } = await supabase.from("children").select("*").order("created_at");
-        if (data?.length) setChildren(data);
+        const [{ data: childData }, { data: pickData }] = await Promise.all([
+          supabase.from("children").select("*").order("created_at"),
+          supabase.from("lunchbox_selections").select("lunchbox_id"),
+        ]);
+        if (!active) return;
+        if (childData?.length) setChildren(childData);
+        if (pickData?.length) setPicked(pickData.map((row) => row.lunchbox_id));
       }
     }
     load();
     return () => { active = false; };
   }, []);
 
+  const pool = useMemo(() => {
+    const chosen = lunchboxes.filter((b) => picked.includes(b.id));
+    return chosen.length ? chosen : lunchboxes;
+  }, [lunchboxes, picked]);
+
   useEffect(() => {
-    if (!recipes.length || plan.length) return;
+    if ((!pool.length && !recipes.length) || plan.length) return;
     const next: PlanCell[] = [];
+    const fits = (box: Lunchbox, age: number, training: boolean) => box.min_age <= age && box.max_age >= age && (!training || box.training_suitable);
     for (let day = 0; day < 5; day++) {
-      const common = recipes.find((r) => children.every((c) => r.min_age <= c.age && r.max_age >= c.age) && (children.some((c) => c.training_days.includes(day)) ? r.training_suitable : true)) ?? recipes[day % recipes.length];
+      const trainingDay = children.some((c) => c.training_days.includes(day));
+      const common = pool.filter((b) => children.every((c) => fits(b, c.age, c.training_days.includes(day) && trainingDay)))[day % Math.max(pool.length, 1)] ?? pool[day % Math.max(pool.length, 1)];
       children.forEach((child) => {
         for (let snack = 1; snack <= child.snacks_per_day; snack++) {
           const training = child.training_days.includes(day);
-          const suitable = recipes.filter((r) => r.min_age <= child.age && r.max_age >= child.age && (!training || r.training_suitable));
-          next.push({ childId: child.id, day, snack, recipeId: snack === 1 && common ? common.id : (suitable[(day + snack) % suitable.length]?.id ?? common?.id ?? ""), training });
+          const suitable = pool.filter((b) => fits(b, child.age, training));
+          const box = snack === 1 && common && fits(common, child.age, training) ? common : suitable[(day + snack) % Math.max(suitable.length, 1)] ?? common;
+          if (box) { next.push({ childId: child.id, day, snack, recipeId: null, lunchboxId: box.id, training }); continue; }
+          const okRecipes = recipes.filter((r) => r.min_age <= child.age && r.max_age >= child.age && (!training || r.training_suitable));
+          const recipe = okRecipes[(day + snack) % Math.max(okRecipes.length, 1)] ?? recipes[0];
+          if (recipe) next.push({ childId: child.id, day, snack, recipeId: recipe.id, lunchboxId: null, training });
         }
       });
     }
     setPlan(next);
-  }, [recipes, children, plan.length]);
+  }, [pool, recipes, children, plan.length]);
 
   const visibleChildren = selectedChild === "all" ? children : children.filter((c) => c.id === selectedChild);
   const shopping = useMemo(() => {
     const totals = new Map<string, { quantity: number; unit: string }>();
+    const add = (list: Ingredient[], divisor: number) => list.forEach((item) => {
+      const old = totals.get(item.name) ?? { quantity: 0, unit: item.unit };
+      totals.set(item.name, { quantity: old.quantity + (item.quantity || 1) / Math.max(divisor, 1), unit: item.unit });
+    });
     plan.filter((p) => visibleChildren.some((c) => c.id === p.childId)).forEach((p) => {
+      const box = lunchboxes.find((b) => b.id === p.lunchboxId);
+      if (box) {
+        add(ingredientsOf(box.ingredients), 1);
+        itemsOf(box).filter((i) => i.kind === "recipe").forEach((item) => {
+          const recipe = recipes.find((r) => r.name.toLowerCase() === item.label.toLowerCase());
+          if (recipe) add(ingredientsOf(recipe.ingredients), recipe.portions);
+        });
+        return;
+      }
       const recipe = recipes.find((r) => r.id === p.recipeId);
-      const ingredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients as Ingredient[] : [];
-      ingredients.forEach((item) => {
-        const old = totals.get(item.name) ?? { quantity: 0, unit: item.unit };
-        totals.set(item.name, { quantity: old.quantity + item.quantity / Math.max(recipe?.portions ?? 1, 1), unit: item.unit });
-      });
+      if (recipe) add(ingredientsOf(recipe.ingredients), recipe.portions);
     });
     return [...totals].sort(([a], [b]) => a.localeCompare(b));
-  }, [plan, recipes, visibleChildren]);
+  }, [plan, recipes, lunchboxes, visibleChildren]);
 
   function regenerate() {
     setPlan([]);
-    setNotice("Plano ajustado às idades, número de lanches e dias de treino.");
-    window.setTimeout(() => setNotice(""), 3200);
+    flash(picked.length ? "Plano gerado apenas com as lancheiras que escolheu." : "Plano ajustado às idades e aos dias de treino.");
+  }
+
+  async function togglePick(id: string) {
+    const isPicked = picked.includes(id);
+    setPicked((old) => (isPicked ? old.filter((x) => x !== id) : [...old, id]));
+    setPlan([]);
+    if (!sessionId) return;
+    if (isPicked) await supabase.from("lunchbox_selections").delete().eq("lunchbox_id", id).eq("user_id", sessionId);
+    else await supabase.from("lunchbox_selections").insert({ user_id: sessionId, lunchbox_id: id });
   }
 
   async function savePlan() {
@@ -121,14 +163,30 @@ function Index() {
       child_id: chosenChild,
       starts_on: "2026-09-14",
     }).select().single();
-    if (error || !saved) { setNotice("Não foi possível guardar o plano."); return; }
+    if (error || !saved) { flash("Não foi possível guardar o plano."); return; }
     const baseDate = new Date("2026-09-14T12:00:00");
     const rows = plan.map((item) => {
       const date = new Date(baseDate); date.setDate(date.getDate() + item.day);
-      return { plan_id: saved.id, child_id: item.childId, recipe_id: item.recipeId, snack_date: date.toISOString().slice(0,10), snack_number: item.snack, training_boost: item.training };
+      return { plan_id: saved.id, child_id: item.childId, recipe_id: item.recipeId, lunchbox_id: item.lunchboxId, snack_date: date.toISOString().slice(0,10), snack_number: item.snack, training_boost: item.training };
     });
     const { error: itemError } = await supabase.from("plan_items").insert(rows);
-    setNotice(itemError ? "O plano foi criado, mas faltaram alguns lanches." : "Plano guardado com sucesso.");
+    flash(itemError ? "O plano foi criado, mas faltaram alguns lanches." : "Plano guardado com sucesso.");
+  }
+
+  async function saveImport(result: ImportResult) {
+    if (!sessionId) { setModal("auth"); return; }
+    const newRecipes = result.recipes.map((r) => ({ ...r, user_id: sessionId }));
+    const newBoxes = result.lunchboxes.map((b) => ({ ...b, user_id: sessionId, source: "import" }));
+    const [recipeResult, boxResult] = await Promise.all([
+      newRecipes.length ? supabase.from("recipes").insert(newRecipes).select() : Promise.resolve({ data: [], error: null }),
+      newBoxes.length ? supabase.from("lunchboxes").insert(newBoxes).select() : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (recipeResult.data?.length) setRecipes((old) => [...old, ...recipeResult.data as Recipe[]]);
+    if (boxResult.data?.length) setLunchboxes((old) => [...old, ...boxResult.data as Lunchbox[]]);
+    setModal(null);
+    setPlan([]);
+    if (recipeResult.error || boxResult.error) flash("Importámos parte do documento; algumas linhas ficaram de fora.");
+    else flash(`Importado: ${recipeResult.data?.length ?? 0} receitas e ${boxResult.data?.length ?? 0} lancheiras.`);
   }
 
   async function addChild(event: FormEvent<HTMLFormElement>) {
@@ -165,33 +223,37 @@ function Index() {
     if (result.error) setNotice(result.error.message);
   }
 
+  const tabs = ([['plano','Plano',CalendarDays],['lancheiras','Lancheiras',Sandwich],['receitas','Receitas',UtensilsCrossed],['compras','Compras',ShoppingBasket],['familia','Família',UserRound]] as const);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-6 px-4 sm:px-6">
           <div className="flex items-center gap-2"><span className="grid size-9 place-items-center rounded-md bg-primary text-primary-foreground"><Apple size={20} /></span><span className="font-display text-2xl">Lancheira</span></div>
           <nav className="ml-auto hidden items-center gap-1 md:flex" aria-label="Navegação principal">
-            {([['plano','Plano',CalendarDays],['receitas','Receitas',UtensilsCrossed],['compras','Compras',ShoppingBasket],['familia','Família',UserRound]] as const).map(([id,label,Icon]) => <Button key={id} variant={tab === id ? "secondary" : "ghost"} onClick={() => setTab(id)}><Icon size={17}/>{label}</Button>)}
+            {tabs.map(([id,label,Icon]) => <Button key={id} variant={tab === id ? "secondary" : "ghost"} onClick={() => setTab(id)}><Icon size={17}/>{label}</Button>)}
           </nav>
           {sessionId ? <span className="hidden rounded-full bg-leaf-soft px-3 py-1 text-xs font-bold text-primary sm:block">Plano guardado</span> : <Button size="sm" variant="outline" onClick={() => setModal("auth")}><LogIn size={16}/>Entrar</Button>}
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 pb-24 pt-8 sm:px-6">
-        {notice && <div className="fixed right-5 top-20 z-50 rounded-md bg-foreground px-4 py-3 text-sm text-background shadow-xl">{notice}</div>}
-        {tab === "plano" && <PlanView children={visibleChildren} allChildren={children} recipes={recipes} plan={plan} familyMode={familyMode} selectedChild={selectedChild} setSelectedChild={setSelectedChild} setFamilyMode={setFamilyMode} period={period} setPeriod={setPeriod} regenerate={regenerate} savePlan={savePlan} />}
-        {tab === "receitas" && <RecipesView recipes={recipes} search={search} setSearch={setSearch} openAdd={() => setModal("recipe")} />}
+        {notice && <div className="fixed right-5 top-20 z-50 max-w-xs rounded-md bg-foreground px-4 py-3 text-sm text-background shadow-xl">{notice}</div>}
+        {tab === "plano" && <PlanView children={visibleChildren} allChildren={children} recipes={recipes} lunchboxes={lunchboxes} picked={picked} plan={plan} familyMode={familyMode} selectedChild={selectedChild} setSelectedChild={setSelectedChild} setFamilyMode={setFamilyMode} period={period} setPeriod={setPeriod} regenerate={regenerate} savePlan={savePlan} openLunchboxes={() => setTab("lancheiras")} />}
+        {tab === "lancheiras" && <LunchboxesView lunchboxes={lunchboxes} picked={picked} toggle={togglePick} openImport={() => setModal("import")} clear={() => { setPicked([]); setPlan([]); if (sessionId) supabase.from("lunchbox_selections").delete().eq("user_id", sessionId); }} />}
+        {tab === "receitas" && <RecipesView recipes={recipes} search={search} setSearch={setSearch} openAdd={() => setModal("recipe")} openImport={() => setModal("import")} />}
         {tab === "compras" && <ShoppingView items={shopping} childName={selectedChild === "all" ? "toda a família" : visibleChildren[0]?.name ?? "plano"} />}
         {tab === "familia" && <FamilyView children={children} openAdd={() => setModal("child")} />}
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-border bg-background p-2 md:hidden">
-        {([['plano','Plano',CalendarDays],['receitas','Receitas',UtensilsCrossed],['compras','Compras',ShoppingBasket],['familia','Família',UserRound]] as const).map(([id,label,Icon]) => <Button key={id} variant="ghost" className={tab === id ? "text-primary" : ""} onClick={() => setTab(id)}><span className="flex flex-col items-center text-xs"><Icon size={18}/>{label}</span></Button>)}
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-border bg-background p-2 md:hidden">
+        {tabs.map(([id,label,Icon]) => <Button key={id} variant="ghost" className={tab === id ? "text-primary" : ""} onClick={() => setTab(id)}><span className="flex flex-col items-center text-xs"><Icon size={18}/>{label}</span></Button>)}
       </nav>
-      {modal && <Modal title={modal === "child" ? "Adicionar criança" : modal === "recipe" ? "Nova receita" : "Guardar os meus planos"} close={() => setModal(null)}>{modal === "child" ? <ChildForm submit={addChild}/> : modal === "recipe" ? <RecipeForm submit={addRecipe}/> : <AuthForm submit={authenticate} google={googleLogin} mode={authMode} setMode={setAuthMode}/>}</Modal>}
+      {modal && <Modal title={modal === "child" ? "Adicionar criança" : modal === "recipe" ? "Nova receita" : modal === "import" ? "Importar plano ou receitas" : "Guardar os meus planos"} close={() => setModal(null)}>{modal === "child" ? <ChildForm submit={addChild}/> : modal === "recipe" ? <RecipeForm submit={addRecipe}/> : modal === "import" ? <ImportForm save={saveImport} signedIn={Boolean(sessionId)} askLogin={() => setModal("auth")}/> : <AuthForm submit={authenticate} google={googleLogin} mode={authMode} setMode={setAuthMode}/>}</Modal>}
     </div>
   );
 }
+
 
 function PageHeading({ eyebrow, title, text, action }: { eyebrow: string; title: string; text: string; action?: React.ReactNode }) {
   return <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-extrabold uppercase text-primary">{eyebrow}</p><h1 className="text-4xl sm:text-5xl">{title}</h1><p className="mt-2 max-w-2xl text-muted-foreground">{text}</p></div>{action}</div>;

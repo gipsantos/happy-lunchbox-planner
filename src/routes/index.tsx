@@ -495,7 +495,7 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
         </div></div>
       </>;
     })()}
-    {openBox && <LunchboxDetail box={openBox} image={imageFor(openBox.id, openBox.image_url, 0)} setImage={(url)=>setImage("lunchboxes",openBox.id,url)} picked={picked.includes(openBox.id)} toggle={()=>toggleBox(openBox.id)} close={()=>setOpen(null)}/>}
+    {openBox && <LunchboxDetail box={openBox} image={imageFor(openBox.id, openBox.image_url, 0)} setImage={(url)=>setImage("lunchboxes",openBox.id,url)} picked={picked.includes(openBox.id)} toggle={()=>toggleBox(openBox.id)} close={()=>setOpen(null)} recipes={recipes} openRecipe={(id)=>setOpen({kind:"recipe",id})}/>}
     {openRecipe && <RecipeDetail recipe={openRecipe} image={imageFor(openRecipe.id, openRecipe.image_url, 1)} setImage={(url)=>setImage("recipes",openRecipe.id,url)} picked={pickedRecipes.includes(openRecipe.id)} toggle={()=>toggleRecipe(openRecipe.id)} close={()=>setOpen(null)}/>}
     <div className="mt-6 flex items-center gap-3 border-l-4 border-primary bg-leaf-soft p-4 text-sm"><Check className="shrink-0 text-primary"/><p><b>Lanche completo:</b> cada sugestão combina hidratos, proteína, fruta ou vegetal e água. Nos treinos, a porção e a energia são reforçadas.</p></div>
   </section>;

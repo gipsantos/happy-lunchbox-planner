@@ -483,13 +483,13 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
             type="button"
             disabled={!id}
             onClick={() => id && setOpen({ kind: box ? "box" : "recipe", id })}
-            className="mb-2 block w-full rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/60 disabled:cursor-default"
+            className="mb-2 block w-full rounded-md border border-border bg-background px-3 py-2.5 text-left text-sm transition-colors hover:border-primary hover:bg-muted/60 disabled:cursor-default"
           >
-            <span className="mb-0.5 flex items-center justify-between gap-2">
+            <span className="mb-1 flex items-center justify-between gap-2">
               <span className="text-[10px] font-extrabold uppercase tracking-wide text-primary">Lanche {cell.snack}</span>
               {cell.training && <Dumbbell size={13} className="shrink-0 text-berry" />}
             </span>
-            <span className="block text-sm font-bold leading-tight">{name}</span>
+            <span className="block text-sm font-bold leading-tight line-clamp-2">{name}</span>
           </button>
         );
       };

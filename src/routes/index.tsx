@@ -278,9 +278,69 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, plan, fa
 }
 
 function RecipesView({ recipes, search, setSearch, openAdd }: { recipes: Recipe[]; search:string; setSearch:(v:string)=>void; openAdd:()=>void }) {
-  const images=[muffins.url,lunchbox.url,fruitBoxes.url]; const shown=recipes.filter((r)=>r.name.toLowerCase().includes(search.toLowerCase()));
-  return <section><PageHeading eyebrow={`${recipes.length} receitas na coleção`} title="Receitas para dias reais" text="Opções práticas, completas e pensadas para preparar sem complicar." action={<Button onClick={openAdd}><Plus size={17}/>Adicionar receita</Button>}/><div className="relative mb-7 max-w-md"><Search className="absolute left-3 top-3 text-muted-foreground" size={18}/><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Pesquisar receitas…" className="h-11 w-full rounded-md border border-input bg-card pl-10 pr-4"/></div><div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{shown.map((r,i)=><article key={r.id} className="overflow-hidden rounded-md border border-border bg-card"><img src={images[i%3]} alt={r.name} className="aspect-[4/3] w-full object-cover" loading="lazy"/><div className="p-5"><div className="mb-3 flex gap-2">{r.freezable&&<span className="rounded-full bg-leaf-soft px-2 py-1 text-xs font-bold text-primary"><Snowflake size={12} className="mr-1 inline"/>Congela</span>}{r.training_suitable&&<span className="rounded-full bg-accent px-2 py-1 text-xs font-bold text-accent-foreground"><Dumbbell size={12} className="mr-1 inline"/>Treino</span>}</div><h2 className="text-2xl">{r.name}</h2><p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{r.description}</p><div className="mt-4 flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground"><span><Clock3 size={14} className="mr-1 inline"/>{r.prep_minutes+r.cook_minutes} min</span><span>{r.min_age}–{r.max_age} anos</span><span>{r.portions} porções</span></div></div></article>)}</div></section>;
+function LunchboxesView({ lunchboxes, picked, toggle, openImport, clear }: { lunchboxes: Lunchbox[]; picked: string[]; toggle:(id:string)=>void; openImport:()=>void; clear:()=>void }) {
+  const [filter, setFilter] = useState<"todas" | "sem-receita" | "treino" | "escolhidas">("todas");
+  const shown = lunchboxes.filter((b) => filter === "todas" || (filter === "sem-receita" ? itemsOf(b).every((i) => i.kind === "bought") : filter === "treino" ? b.training_suitable : picked.includes(b.id)));
+  return <section>
+    <PageHeading eyebrow={`${lunchboxes.length} sugestões · ${picked.length} escolhidas`} title="Lancheiras completas" text="Sugestões prontas de lanche completo, com ou sem receita. Escolha as que quer no plano semanal." action={<div className="flex gap-2">{picked.length>0&&<Button variant="ghost" onClick={clear}>Limpar escolhas</Button>}<Button variant="outline" onClick={openImport}><FileUp size={17}/>Importar documento</Button></div>}/>
+    <div className="mb-6 inline-flex flex-wrap gap-1 rounded-md border border-border bg-card p-1">
+      {([["todas","Todas"],["sem-receita","Sem preparação"],["treino","Dias de treino"],["escolhidas","Escolhidas"]] as const).map(([id,label])=><Button key={id} size="sm" variant={filter===id?"secondary":"ghost"} onClick={()=>setFilter(id)}>{label}</Button>)}
+    </div>
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{shown.map((b)=>{const active=picked.includes(b.id);const items=itemsOf(b);return <article key={b.id} className={`rounded-md border bg-card p-5 ${active?"border-primary ring-2 ring-primary/30":"border-border"}`}>
+      <div className="mb-3 flex items-start justify-between gap-3"><h2 className="text-2xl leading-tight">{b.name}</h2><button onClick={()=>toggle(b.id)} aria-pressed={active} aria-label={active?`Retirar ${b.name} do plano`:`Usar ${b.name} no plano`} className={`grid size-8 shrink-0 place-items-center rounded-full border ${active?"border-primary bg-primary text-primary-foreground":"border-border text-muted-foreground"}`}>{active?<Check size={16}/>:<Plus size={16}/>}</button></div>
+      <p className="text-sm text-muted-foreground">{b.description}</p>
+      <ul className="mt-4 space-y-1 text-sm">{items.map((i)=><li key={i.label} className="flex items-center gap-2"><span className={`size-1.5 rounded-full ${i.kind==="recipe"?"bg-primary":"bg-accent"}`}/>{i.label}<span className="text-xs text-muted-foreground">{i.kind==="recipe"?"receita":"comprado"}</span></li>)}</ul>
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4 text-xs">{b.components.map((c)=><span key={c} className="rounded-full bg-muted px-2 py-1 font-bold text-muted-foreground">{c}</span>)}{b.training_suitable&&<span className="rounded-full bg-accent px-2 py-1 font-bold text-accent-foreground"><Dumbbell size={12} className="mr-1 inline"/>treino</span>}{!b.needs_prep&&<span className="rounded-full bg-leaf-soft px-2 py-1 font-bold text-primary">sem preparação</span>}<span className="ml-auto text-muted-foreground">{b.min_age}–{b.max_age} anos</span></div>
+    </article>})}</div>
+    {!shown.length&&<p className="text-muted-foreground">Ainda não há lancheiras neste filtro.</p>}
+  </section>;
 }
+
+function ImportForm({ save, signedIn, askLogin }: { save:(result:ImportResult)=>void; signedIn:boolean; askLogin:()=>void }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<ImportResult | null>(null);
+
+  async function readFile(file: File) {
+    setError("");
+    if (file.size > 1_000_000) { setError("Ficheiro demasiado grande."); return; }
+    if (!/\.(txt|md|csv|json)$/i.test(file.name)) { setError("Aceitamos ficheiros de texto (.txt, .md, .csv). Para Word ou PDF, copie e cole o conteúdo abaixo."); return; }
+    setText(await file.text());
+  }
+
+  async function analyse() {
+    setBusy(true); setError("");
+    try {
+      const data = await importPlanText({ data: { text } });
+      setResult(data);
+      if (!data.recipes.length && !data.lunchboxes.length) setError("Não encontrámos lanches nem receitas neste texto.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Não foi possível ler o documento.");
+    } finally { setBusy(false); }
+  }
+
+  if (result && (result.recipes.length || result.lunchboxes.length)) return <div className="space-y-4">
+    <p className="text-sm text-muted-foreground">Encontrámos <b>{result.lunchboxes.length}</b> lancheiras e <b>{result.recipes.length}</b> receitas.</p>
+    <ul className="max-h-60 space-y-1 overflow-auto rounded-md border border-border p-4 text-sm">{result.lunchboxes.map((b)=><li key={b.name}>🥪 {b.name}</li>)}{result.recipes.map((r)=><li key={r.name}>🍳 {r.name}</li>)}</ul>
+    {signedIn ? <Button className="w-full" onClick={()=>save(result)}>Adicionar à minha biblioteca</Button> : <Button className="w-full" onClick={askLogin}>Entrar para guardar</Button>}
+    <Button variant="ghost" className="w-full" onClick={()=>setResult(null)}>Voltar</Button>
+  </div>;
+
+  return <div className="space-y-4">
+    <p className="text-sm text-muted-foreground">Tem um plano de lanches feito noutra app, num email ou num documento? Carregue o ficheiro de texto ou cole o conteúdo — organizamos em lancheiras completas e receitas.</p>
+    <label className="flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-border p-4 text-sm"><FileUp size={18} className="text-primary"/><span>Escolher ficheiro de texto (.txt, .md, .csv)</span><input type="file" accept=".txt,.md,.csv,.json,text/plain" className="hidden" onChange={(e)=>{const f=e.target.files?.[0]; if (f) readFile(f);}}/></label>
+    <textarea value={text} onChange={(e)=>setText(e.target.value)} placeholder={"Segunda: pão com queijo, uvas e água\nTerça: muffins de banana + iogurte…"} className="min-h-40 w-full rounded-md border border-input bg-background p-3 text-sm"/>
+    {error&&<p className="text-sm font-bold text-destructive">{error}</p>}
+    <Button className="w-full" disabled={busy||text.trim().length<20} onClick={analyse}>{busy?"A ler o documento…":<><Sparkles size={17}/>Analisar conteúdo</>}</Button>
+  </div>;
+}
+
+function RecipesView({ recipes, search, setSearch, openAdd, openImport }: { recipes: Recipe[]; search:string; setSearch:(v:string)=>void; openAdd:()=>void; openImport:()=>void }) {
+  const images=[muffins.url,lunchbox.url,fruitBoxes.url]; const shown=recipes.filter((r)=>r.name.toLowerCase().includes(search.toLowerCase()));
+  return <section><PageHeading eyebrow={`${recipes.length} receitas na coleção`} title="Receitas para dias reais" text="Opções práticas, completas e pensadas para preparar sem complicar." action={<div className="flex gap-2"><Button variant="outline" onClick={openImport}><FileUp size={17}/>Importar</Button><Button onClick={openAdd}><Plus size={17}/>Adicionar receita</Button></div>}/><div className="relative mb-7 max-w-md"><Search className="absolute left-3 top-3 text-muted-foreground" size={18}/><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Pesquisar receitas…" className="h-11 w-full rounded-md border border-input bg-card pl-10 pr-4"/></div><div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{shown.map((r,i)=><article key={r.id} className="overflow-hidden rounded-md border border-border bg-card"><img src={images[i%3]} alt={r.name} className="aspect-[4/3] w-full object-cover" loading="lazy"/><div className="p-5"><div className="mb-3 flex gap-2">{r.freezable&&<span className="rounded-full bg-leaf-soft px-2 py-1 text-xs font-bold text-primary"><Snowflake size={12} className="mr-1 inline"/>Congela</span>}{r.training_suitable&&<span className="rounded-full bg-accent px-2 py-1 text-xs font-bold text-accent-foreground"><Dumbbell size={12} className="mr-1 inline"/>Treino</span>}</div><h2 className="text-2xl">{r.name}</h2><p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{r.description}</p><div className="mt-4 flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground"><span><Clock3 size={14} className="mr-1 inline"/>{r.prep_minutes+r.cook_minutes} min</span><span>{r.min_age}–{r.max_age} anos</span><span>{r.portions} porções</span></div></div></article>)}</div></section>;
+}
+
 
 function ShoppingView({ items, childName }: { items:[string,{quantity:number;unit:string}][]; childName:string }) {
   const [checked,setChecked]=useState<string[]>([]); return <section><PageHeading eyebrow="Lista consolidada" title="Compras da semana" text={`Tudo o que precisa para o plano de ${childName}, somado numa única lista.`} action={<Button variant="outline" onClick={()=>window.print()}><ShoppingBasket size={17}/>Imprimir lista</Button>}/><div className="grid gap-8 lg:grid-cols-[1fr_320px]"><div className="border-y border-border bg-card">{items.length ? items.map(([name,value])=><label key={name} className="flex cursor-pointer items-center gap-4 border-b border-border px-5 py-4"><input type="checkbox" checked={checked.includes(name)} onChange={()=>setChecked((old)=>old.includes(name)?old.filter((x)=>x!==name):[...old,name])} className="size-5 accent-primary"/><span className={`flex-1 font-semibold ${checked.includes(name)?'text-muted-foreground line-through':''}`}>{name}</span><span className="text-sm text-muted-foreground">{Math.ceil(value.quantity*10)/10} {value.unit}</span></label>) : <p className="p-8 text-muted-foreground">O plano ainda está a ser preparado.</p>}</div><aside className="self-start rounded-md bg-primary p-6 text-primary-foreground"><ShoppingBasket size={28}/><h2 className="mt-4 text-2xl">{checked.length} de {items.length}</h2><p className="mt-2 text-sm opacity-80">ingredientes já estão no carrinho.</p><div className="mt-6 h-2 overflow-hidden rounded-full bg-primary-foreground/20"><div className="h-full bg-primary-foreground" style={{width:`${items.length?checked.length/items.length*100:0}%`}}/></div></aside></div></section>;

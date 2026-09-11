@@ -433,7 +433,19 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
   const openRecipe = open?.kind === "recipe" ? recipes.find((r) => r.id === open.id) ?? null : null;
   const fallbacks = [lunchbox.url, fruitBoxes.url, muffins.url];
   const imageFor = (id: string, stored: string | null | undefined, i: number) => images[id] || stored || fallbacks[i % 3] || lunchbox.url;
-  return <section><PageHeading eyebrow={period === "week" ? "Semana de 14 a 18 de setembro" : "Setembro de 2026 · 4 semanas"} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana equilibrada" : "Um mês equilibrado"}, adaptado a cada idade e aos dias com mais energia. Toque num lanche para ver os detalhes.`} action={<div className="flex gap-2"><Button variant="outline" onClick={savePlan}><Check size={17}/>Guardar</Button><Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button></div>}/>
+  const nameOf = (cell: PlanCell) => lunchboxes.find((x) => x.id === cell.lunchboxId)?.name ?? recipes.find((x) => x.id === cell.recipeId)?.name ?? "";
+  function exportCsv() {
+    const rows = [["Criança", ...weekDays].join(";")];
+    for (const child of children) {
+      const cols = weekDays.map((_, d) => plan.filter((p) => p.childId === child.id && p.day === d).map((c) => `Lanche ${c.snack}: ${nameOf(c)}`).join(" | "));
+      rows.push([child.name, ...cols].join(";"));
+    }
+    const url = URL.createObjectURL(new Blob(["\uFEFF" + rows.join("\n")], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = "plano-lancheiras.csv"; a.click();
+    URL.revokeObjectURL(url);
+  }
+  return <section><PageHeading eyebrow={period === "week" ? "Semana de 14 a 18 de setembro" : "Setembro de 2026 · 4 semanas"} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana equilibrada" : "Um mês equilibrado"}, adaptado a cada idade e aos dias com mais energia. Toque num lanche para ver os detalhes.`} action={<div className="flex flex-wrap gap-2 print:hidden"><Button variant="outline" onClick={exportCsv}><FileUp size={17}/>Exportar</Button><Button variant="outline" onClick={()=>window.print()}><CalendarDays size={17}/>Imprimir</Button><Button variant="outline" onClick={savePlan}><Check size={17}/>Guardar</Button><Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button></div>}/>
     <div className="mb-6 flex flex-wrap items-center gap-3">
       <div className="inline-flex rounded-md border border-border bg-card p-1"><Button size="sm" variant={period === "week" ? "secondary":"ghost"} onClick={()=>setPeriod("week")}>Semana</Button><Button size="sm" variant={period === "month" ? "secondary":"ghost"} onClick={()=>setPeriod("month")}>Mês</Button></div>
       <div className="inline-flex rounded-md border border-border bg-card p-1"><Button size="sm" variant={familyMode ? "secondary":"ghost"} onClick={()=>{setFamilyMode(true);setSelectedChild("all")}}>Agregado</Button><Button size="sm" variant={!familyMode ? "secondary":"ghost"} onClick={()=>{setFamilyMode(false);setSelectedChild(allChildren[0]?.id ?? "all")}}>Por filho</Button></div>

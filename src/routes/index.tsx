@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Apple, CalendarDays, Check, Clock3, Dumbbell, FileUp, LogIn, Plus, Sandwich, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
+import { Apple, CalendarDays, Check, Clock3, Dumbbell, FileUp, Image as ImageIcon, LogIn, Plus, Sandwich, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import type { Tables } from "@/integrations/supabase/types";
@@ -20,6 +20,37 @@ type PlanCell = { childId: string; day: number; snack: number; recipeId: string 
 
 const itemsOf = (box: Lunchbox) => (Array.isArray(box.items) ? (box.items as LunchItem[]) : []);
 const ingredientsOf = (value: unknown) => (Array.isArray(value) ? (value as Ingredient[]) : []);
+const storedImage = (row: { image_url?: string | null }) => row.image_url ?? "";
+
+async function fileToSmallImage(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const max = 640;
+  const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.72);
+}
+
+function ImagePicker({ label, onPick, className = "" }: { label: string; onPick: (dataUrl: string) => void; className?: string }) {
+  return (
+    <label className={`cursor-pointer rounded-full bg-background/90 px-3 py-1 text-xs font-bold text-foreground shadow ${className}`}>
+      <ImageIcon size={12} className="mr-1 inline" />
+      {label}
+      <input
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          if (file) onPick(await fileToSmallImage(file));
+          e.target.value = "";
+        }}
+      />
+    </label>
+  );
+}
 
 
 const demoChildren: Child[] = [

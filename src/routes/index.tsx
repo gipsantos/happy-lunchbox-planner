@@ -463,8 +463,8 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
     window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
   }
   return <section><PageHeading eyebrow={period === "week" ? "Semana de 14 a 18 de setembro" : "Setembro de 2026 · 4 semanas"} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana equilibrada" : "Um mês equilibrado"}, adaptado a cada idade e aos dias com mais energia. Toque num lanche para ver os detalhes.`}/>
-    <div className="mb-6 flex flex-wrap items-start gap-3 print:hidden">
-      <div className="relative">
+    <div className="mb-6 print:hidden">
+      <div className="relative inline-block">
         <Button variant="outline" onClick={() => setActionsOpen((v) => !v)} aria-expanded={actionsOpen} aria-haspopup="menu"><CalendarDays size={17}/>Ações do plano</Button>
         {actionsOpen && (
           <div className="absolute left-1/2 top-full z-50 mt-1 w-52 -translate-x-1/2 rounded-md border border-border bg-background py-1 shadow-xl" onMouseDown={(e) => e.stopPropagation()}>
@@ -477,7 +477,6 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
           </div>
         )}
       </div>
-      <Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button>
     </div>
     <div className="mb-6 flex flex-wrap items-center gap-3">
       <div className="inline-flex rounded-md border border-border bg-card p-1"><Button size="sm" variant={period === "week" ? "secondary":"ghost"} onClick={()=>setPeriod("week")}>Semana</Button><Button size="sm" variant={period === "month" ? "secondary":"ghost"} onClick={()=>setPeriod("month")}>Mês</Button></div>

@@ -15,7 +15,7 @@ type Recipe = Tables<"recipes">;
 type Lunchbox = Tables<"lunchboxes">;
 type LunchItem = { label: string; kind: "recipe" | "bought" };
 type Ingredient = { name: string; quantity: number; unit: string };
-type PlanCell = { childId: string; day: number; snack: number; recipeId: string | null; lunchboxId: string | null; training: boolean; label?: string };
+type PlanCell = { childId: string; day: number; snack: number; recipeId: string | null; lunchboxId: string | null; training: boolean; label?: string | undefined };
 
 const itemsOf = (box: Lunchbox) => (Array.isArray(box.items) ? (box.items as LunchItem[]) : []);
 const ingredientsOf = (value: unknown) => (Array.isArray(value) ? (value as Ingredient[]) : []);

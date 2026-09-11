@@ -534,7 +534,6 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
   const [edit, setEdit] = useState<PlanCell | null>(null);
   const [swapping, setSwapping] = useState(false);
   const [swapQuery, setSwapQuery] = useState("");
-  const [busyImage, setBusyImage] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
   useEffect(() => { setWeekIndex(0); setDay(0); }, [period]);
   useEffect(() => {
@@ -585,21 +584,95 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
     win.focus();
     win.setTimeout(() => win.print(), 400);
   }
-  async function exportImage() {
-    setBusyImage(true);
-    const host = document.createElement("div");
-    host.style.cssText = "position:fixed;left:-10000px;top:0;width:1400px;background:#fff";
-    host.innerHTML = `<style>${printCss}</style><div style="padding:24px">${tableHtml()}</div>`;
-    document.body.appendChild(host);
-    try {
-      const { toPng } = await import("html-to-image");
-      const url = await toPng(host, { backgroundColor: "#ffffff", pixelRatio: 2, width: 1400, height: host.scrollHeight });
-      const a = document.createElement("a");
-      a.href = url; a.download = "plano-lancheiras.png"; a.click();
-    } finally {
-      host.remove();
-      setBusyImage(false);
+  function exportImage() {
+    const scale = 2;
+    const colChild = 150, colDay = 210, pad = 10;
+    const width = colChild + colDay * 5 + 40;
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const font = (size: number, weight = "400") => `${weight} ${size}px system-ui, -apple-system, 'Segoe UI', sans-serif`;
+    const wrap = (text: string, max: number, size: number, weight = "400") => {
+      ctx.font = font(size, weight);
+      const out: string[] = [];
+      let line = "";
+      for (const word of text.split(/\s+/)) {
+        const test = line ? `${line} ${word}` : word;
+        if (ctx.measureText(test).width > max && line) { out.push(line); line = word; } else line = test;
+      }
+      if (line) out.push(line);
+      return out;
+    };
+    type Cell = { lines: { text: string; size: number; weight: string; color: string }[] };
+    const blocks: { title: string; header: string[]; rows: { head: Cell; cells: Cell[] }[] }[] = [];
+    for (let w = 0; w < weeks; w++) {
+      const rows = children.map((child) => ({
+        head: { lines: [
+          ...wrap(child.name, colChild - pad * 2, 13, "700").map((text) => ({ text, size: 13, weight: "700", color: "#1f2b20" })),
+          { text: `${child.age} anos`, size: 11, weight: "400", color: "#6b7268" },
+        ] },
+        cells: weekDays.map((_, i) => {
+          const cells = cellsFor(child.id, i, w);
+          if (!cells.length) return { lines: [{ text: "—", size: 12, weight: "400", color: "#a2a79e" }] };
+          const lines: Cell["lines"] = [];
+          cells.forEach((c) => {
+            lines.push({ text: `LANCHE ${c.snack}${c.training ? " · TREINO" : ""}`, size: 9, weight: "700", color: "#2f6b45" });
+            wrap(nameOf(c) || "A preparar", colDay - pad * 2, 12).forEach((text) => lines.push({ text, size: 12, weight: "400", color: "#1f2b20" }));
+          });
+          return { lines };
+        }),
+      }));
+      blocks.push({ title: `Semana ${w + 1} · ${rangeLabel(w)}`, header: weekDays.map((d, i) => `${d} ${shortLabel(dateAt(i, w))}`), rows });
     }
+    const lineH = 17, headerH = 34;
+    const rowHeight = (row: { head: Cell; cells: Cell[] }) => Math.max(56, ...[row.head, ...row.cells].map((c) => c.lines.length * lineH + pad * 2));
+    let height = 60;
+    blocks.forEach((b) => { height += 34 + headerH + b.rows.reduce((sum, r) => sum + rowHeight(r), 0) + 16; });
+    canvas.width = width * scale; canvas.height = height * scale;
+    ctx.scale(scale, scale);
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, width, height);
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "#1f2b20"; ctx.font = font(22, "700");
+    ctx.fillText("Plano de lancheiras", 20, 18);
+    let y = 58;
+    const stroke = (x: number, yy: number, w2: number, h2: number, fill?: string) => {
+      if (fill) { ctx.fillStyle = fill; ctx.fillRect(x, yy, w2, h2); }
+      ctx.strokeStyle = "#d8d5c8"; ctx.lineWidth = 1; ctx.strokeRect(x, yy, w2, h2);
+    };
+    for (const block of blocks) {
+      ctx.fillStyle = "#2f6b45"; ctx.font = font(13, "700");
+      ctx.fillText(block.title, 20, y + 8);
+      y += 34;
+      stroke(20, y, colChild, headerH, "#f3f1e6");
+      ctx.fillStyle = "#1f2b20"; ctx.font = font(12, "700");
+      ctx.fillText("Criança", 20 + pad, y + 10);
+      block.header.forEach((label, i) => {
+        stroke(20 + colChild + colDay * i, y, colDay, headerH, "#f3f1e6");
+        ctx.fillStyle = "#1f2b20"; ctx.font = font(12, "700");
+        ctx.fillText(label, 20 + colChild + colDay * i + pad, y + 10);
+      });
+      y += headerH;
+      for (const row of block.rows) {
+        const h = rowHeight(row);
+        const drawCell = (cell: Cell, x: number, w2: number, bg?: string) => {
+          stroke(x, y, w2, h, bg);
+          let ty = y + pad;
+          cell.lines.forEach((line) => {
+            ctx.fillStyle = line.color; ctx.font = font(line.size, line.weight);
+            ctx.fillText(line.text, x + pad, ty);
+            ty += lineH;
+          });
+        };
+        drawCell(row.head, 20, colChild, "#fbfaf4");
+        row.cells.forEach((cell, i) => drawCell(cell, 20 + colChild + colDay * i, colDay));
+        y += h;
+      }
+      y += 16;
+    }
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = "plano-lancheiras.png";
+    a.click();
   }
   function exportCsv() {
     const rows: string[] = [];
@@ -638,7 +711,7 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
             <button onClick={() => { savePlan(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><Check size={15}/>Guardar plano</button>
             <button onClick={() => { exportCsv(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><FileUp size={15}/>Exportar CSV</button>
             <button onClick={() => { printPlan(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><CalendarDays size={15}/>Imprimir ou PDF</button>
-            <button onClick={() => { exportImage(); setActionsOpen(false); }} disabled={busyImage} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted disabled:opacity-50"><ImageIcon size={15}/>{busyImage ? "A criar imagem…" : "Guardar imagem"}</button>
+            <button onClick={() => { exportImage(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><ImageIcon size={15}/>Guardar imagem</button>
             <button onClick={() => { shareWhatsApp(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><MessageCircle size={15}/>WhatsApp</button>
             <button onClick={() => { if (window.confirm("Limpar todo o plano?")) clearPlan(); setActionsOpen(false); }} className="flex w-full items-center gap-2 border-t border-border px-4 py-2 text-left text-sm font-bold text-berry hover:bg-muted"><X size={15}/>Limpar plano</button>
           </div>

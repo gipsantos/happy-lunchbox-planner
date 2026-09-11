@@ -133,7 +133,12 @@ function Index() {
           supabase.from("lunchbox_selections").select("lunchbox_id"),
         ]);
         if (!active) return;
-        if (childData?.length) setChildren(childData);
+        if (childData?.length) {
+          setChildren(childData);
+          const photos: Record<string, string> = {};
+          (childData as { id: string; photo_url?: string | null }[]).forEach((c) => { if (c.photo_url) photos[c.id] = c.photo_url; });
+          setImages((old) => ({ ...old, ...photos }));
+        }
         if (pickData?.length) setPicked(pickData.map((row) => row.lunchbox_id));
       }
     }

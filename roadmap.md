@@ -14,3 +14,8 @@
 - [x] Imprimir/exportar o plano (tabela) no computador
 - [x] Abrir receita a partir do detalhe da lancheira (plano e lancheiras)
 - [x] Alinhar campos de pesquisa/filtros (Lancheiras e Receitas)
+- [x] Simplificar tabela do plano: só títulos, sem imagens, abrir detalhe ao clicar
+- [x] Cards do plano um pouco mais altos com nome completo em até 2 linhas
+- [x] Cards do plano com altura estática e nome em até 3 linhas
+- [x] Juntar botões Exportar/Imprimir/WhatsApp/Guardar/Gerar num menu único
+- [x] Alinhar altura do campo de pesquisa com os botões de filtro em Lancheiras/Receitas

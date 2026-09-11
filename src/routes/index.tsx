@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Apple, ArrowUpDown, CalendarDays, Camera, Check, ChevronRight, Clock3, Dumbbell, FileUp, Image as ImageIcon, LayoutGrid, List, LogIn, MessageCircle, Plus, Sandwich, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
@@ -74,9 +74,9 @@ function ImagePicker({ label, onPick, className = "" }: { label: string; onPick:
 }
 
 function ViewToggle({ view, setView }: { view: "cards" | "lista"; setView: (v: "cards" | "lista") => void }) {
-  return <div className="inline-flex rounded-md border border-border bg-card p-1">
-    <Button size="sm" variant={view === "cards" ? "secondary" : "ghost"} onClick={() => setView("cards")} aria-pressed={view === "cards"}><LayoutGrid size={15}/>Cartões</Button>
-    <Button size="sm" variant={view === "lista" ? "secondary" : "ghost"} onClick={() => setView("lista")} aria-pressed={view === "lista"}><List size={15}/>Lista</Button>
+  return <div className="inline-flex h-10 items-center rounded-md border border-border bg-card p-1">
+    <Button size="default" variant={view === "cards" ? "secondary" : "ghost"} onClick={() => setView("cards")} aria-pressed={view === "cards"}><LayoutGrid size={15}/>Cartões</Button>
+    <Button size="default" variant={view === "lista" ? "secondary" : "ghost"} onClick={() => setView("lista")} aria-pressed={view === "lista"}><List size={15}/>Lista</Button>
   </div>;
 }
 
@@ -434,6 +434,16 @@ function PageHeading({ eyebrow, title, text, action }: { eyebrow: string; title:
 function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRecipes, toggleBox, toggleRecipe, images, setImage, plan, familyMode, selectedChild, setSelectedChild, setFamilyMode, period, setPeriod, regenerate, savePlan, openLunchboxes }: { children: Child[]; allChildren: Child[]; recipes: Recipe[]; lunchboxes: Lunchbox[]; picked: string[]; pickedRecipes: string[]; toggleBox:(id:string)=>void; toggleRecipe:(id:string)=>void; images: Record<string,string>; setImage:(table:"recipes"|"lunchboxes"|"children",id:string,url:string)=>void; plan: PlanCell[]; familyMode: boolean; selectedChild: string; setSelectedChild:(v:string)=>void; setFamilyMode:(v:boolean)=>void; period:"week"|"month"; setPeriod:(v:"week"|"month")=>void; regenerate:()=>void; savePlan:()=>void; openLunchboxes:()=>void }) {
   const [open, setOpen] = useState<{ kind: "box" | "recipe"; id: string } | null>(null);
   const [day, setDay] = useState(0);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!actionsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) setActionsOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [actionsOpen]);
   const openBox = open?.kind === "box" ? lunchboxes.find((b) => b.id === open.id) ?? null : null;
   const openRecipe = open?.kind === "recipe" ? recipes.find((r) => r.id === open.id) ?? null : null;
   const fallbacks = [lunchbox.url, fruitBoxes.url, muffins.url];
@@ -462,7 +472,21 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
     window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
   }
   return <section><PageHeading eyebrow={period === "week" ? "Semana de 14 a 18 de setembro" : "Setembro de 2026 · 4 semanas"} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana equilibrada" : "Um mês equilibrado"}, adaptado a cada idade e aos dias com mais energia. Toque num lanche para ver os detalhes.`}/>
-    <div className="mb-6 flex flex-wrap gap-2 print:hidden"><Button variant="outline" onClick={exportCsv}><FileUp size={17}/>Exportar</Button><Button variant="outline" onClick={()=>window.print()}><CalendarDays size={17}/>Imprimir</Button><Button variant="outline" onClick={shareWhatsApp}><MessageCircle size={17}/>WhatsApp</Button><Button variant="outline" onClick={savePlan}><Check size={17}/>Guardar</Button><Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button></div>
+    <div className="mb-6 print:hidden">
+      <div ref={actionsRef} className="relative inline-block">
+        <Button variant="outline" onClick={() => setActionsOpen((v) => !v)} aria-expanded={actionsOpen} aria-haspopup="menu"><CalendarDays size={17}/>Ações do plano</Button>
+        {actionsOpen && (
+          <div className="absolute left-1/2 top-full z-50 mt-1 w-52 -translate-x-1/2 rounded-md border border-border bg-background py-1 shadow-xl" onMouseDown={(e) => e.stopPropagation()}>
+            <button onClick={() => { exportCsv(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><FileUp size={15}/>Exportar CSV</button>
+            <button onClick={() => { window.print(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><CalendarDays size={15}/>Imprimir</button>
+            <button onClick={() => { shareWhatsApp(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><MessageCircle size={15}/>WhatsApp</button>
+            <button onClick={() => { savePlan(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold hover:bg-muted"><Check size={15}/>Guardar</button>
+            <div className="my-1 border-t border-border" />
+            <button onClick={() => { regenerate(); setActionsOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm font-bold text-primary hover:bg-muted"><Sparkles size={15}/>Gerar novo plano</button>
+          </div>
+        )}
+      </div>
+    </div>
     <div className="mb-6 flex flex-wrap items-center gap-3">
       <div className="inline-flex rounded-md border border-border bg-card p-1"><Button size="sm" variant={period === "week" ? "secondary":"ghost"} onClick={()=>setPeriod("week")}>Semana</Button><Button size="sm" variant={period === "month" ? "secondary":"ghost"} onClick={()=>setPeriod("month")}>Mês</Button></div>
       <div className="inline-flex rounded-md border border-border bg-card p-1"><Button size="sm" variant={familyMode ? "secondary":"ghost"} onClick={()=>{setFamilyMode(true);setSelectedChild("all")}}>Agregado</Button><Button size="sm" variant={!familyMode ? "secondary":"ghost"} onClick={()=>{setFamilyMode(false);setSelectedChild(allChildren[0]?.id ?? "all")}}>Por filho</Button></div>
@@ -472,20 +496,26 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
     </div>
     {period === "month" && <div className="mb-5 grid grid-cols-4 gap-2">{[1,2,3,4].map((week)=><button key={week} className={`rounded-md border p-3 text-left text-sm ${week===1?'border-primary bg-leaf-soft':'border-border bg-card'}`} onClick={()=>setPeriod("week")}><b>Semana {week}</b><span className="block text-xs text-muted-foreground">{week===1?'14–18 set':week===2?'21–25 set':week===3?'28 set–2 out':'5–9 out'}</span></button>)}</div>}
     {(() => {
-      const snackCard = (cell: PlanCell, i: number) => {
+      const snackPill = (cell: PlanCell) => {
         const box = lunchboxes.find((x) => x.id === cell.lunchboxId);
         const r = recipes.find((x) => x.id === cell.recipeId);
-        const parts = box ? itemsOf(box).map((it) => it.label) : ingredientsOf(r?.ingredients).map((it) => it.name).slice(0, 3);
         const name = box?.name ?? r?.name ?? "A preparar…";
         const id = box?.id ?? r?.id;
-        return <button key={cell.snack} type="button" disabled={!id} onClick={() => id && setOpen({ kind: box ? "box" : "recipe", id })} className="mb-2 flex w-full items-start gap-3 rounded-md bg-muted p-3 text-left transition-colors hover:bg-muted/70 disabled:cursor-default">
-          <img src={imageFor(id ?? "x", box?.image_url ?? r?.image_url, i)} alt="" className="size-12 shrink-0 rounded-md object-cover" loading="lazy"/>
-          <span className="min-w-0 flex-1">
-            <span className="mb-1 flex items-center justify-between gap-2"><span className="text-[11px] font-extrabold uppercase text-primary">Lanche {cell.snack}</span>{cell.training && <Dumbbell size={15} className="shrink-0 text-berry"/>}</span>
-            <span className="block text-sm font-bold leading-tight">{name}</span>
-            <span className="mt-1 block text-xs text-muted-foreground">{parts.join(" · ")}</span>
-          </span>
-        </button>;
+        return (
+          <button
+            key={cell.snack}
+            type="button"
+            disabled={!id}
+            onClick={() => id && setOpen({ kind: box ? "box" : "recipe", id })}
+            className="mb-2 flex h-[4.5rem] w-full flex-col justify-center rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/60 disabled:cursor-default"
+          >
+            <span className="mb-1 flex items-center justify-between gap-2">
+              <span className="text-[10px] font-extrabold uppercase tracking-wide text-primary">Lanche {cell.snack}</span>
+              {cell.training && <Dumbbell size={13} className="shrink-0 text-berry" />}
+            </span>
+            <span className="block text-sm font-bold leading-tight line-clamp-3">{name}</span>
+          </button>
+        );
       };
 
       return <>
@@ -496,14 +526,14 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
             const cells = plan.filter((p) => p.childId === child.id && p.day === day);
             return <article key={child.id} className="rounded-md border border-border bg-card p-4">
               <div className="mb-3 flex items-center gap-3"><span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full bg-leaf-soft font-bold text-primary">{images[child.id] ? <img src={images[child.id]} alt="" className="size-full object-cover"/> : child.name[0]}</span><span className="min-w-0"><b className="block truncate">{child.name}</b><span className="text-xs text-muted-foreground">{child.age} anos · {child.snacks_per_day} {child.snacks_per_day === 1 ? "lanche" : "lanches"}</span></span>{child.training_days.includes(day) && <span className="ml-auto shrink-0 rounded-full bg-accent px-2 py-1 text-[11px] font-bold text-accent-foreground"><Dumbbell size={11} className="mr-1 inline"/>treino</span>}</div>
-              {cells.length ? cells.map((cell, i) => snackCard(cell, i)) : <p className="text-sm text-muted-foreground">Sem lanche definido para este dia.</p>}
+              {cells.length ? cells.map((cell) => snackPill(cell)) : <p className="text-sm text-muted-foreground">Sem lanche definido para este dia.</p>}
             </article>;
           })}</div>
         </div>
 
         <div className="hidden overflow-x-auto border-y border-border bg-card md:block print:block"><div className="grid min-w-[880px] grid-cols-[150px_repeat(5,minmax(145px,1fr))]">
           <div className="border-b border-r border-border p-4 text-sm font-bold text-muted-foreground">Criança</div>{weekDays.map((d,i)=><div key={d} className="border-b border-r border-border p-4"><b>{d}</b><span className="ml-2 text-xs text-muted-foreground">{14+i} set</span></div>)}
-          {children.map((child)=><div className="contents" key={child.id}><div className="border-b border-r border-border p-4"><div className="mb-1 grid size-10 place-items-center overflow-hidden rounded-full bg-leaf-soft font-bold text-primary">{images[child.id]?<img src={images[child.id]} alt="" className="size-full object-cover"/>:child.name[0]}</div><b>{child.name}</b><p className="text-xs text-muted-foreground">{child.age} anos · {child.snacks_per_day} {child.snacks_per_day===1?'lanche':'lanches'}</p></div>{weekDays.map((_,d)=>{const cells=plan.filter((p)=>p.childId===child.id&&p.day===d);return <div key={d} className="min-h-36 border-b border-r border-border p-3">{cells.map((cell,i)=>snackCard(cell,i))}{child.training_days.includes(d)&&<span className="text-[11px] font-bold text-berry">Dia de treino · reforçado</span>}</div>})}</div>)}
+          {children.map((child)=><div className="contents" key={child.id}><div className="border-b border-r border-border p-4"><div className="mb-1 grid size-10 place-items-center overflow-hidden rounded-full bg-leaf-soft font-bold text-primary">{images[child.id]?<img src={images[child.id]} alt="" className="size-full object-cover"/>:child.name[0]}</div><b>{child.name}</b><p className="text-xs text-muted-foreground">{child.age} anos · {child.snacks_per_day} {child.snacks_per_day===1?'lanche':'lanches'}</p></div>{weekDays.map((_,d)=>{const cells=plan.filter((p)=>p.childId===child.id&&p.day===d);return <div key={d} className="min-h-44 border-b border-r border-border p-3 align-top">{cells.map((cell)=>snackPill(cell))}{child.training_days.includes(d)&&<span className="text-[11px] font-bold text-berry">Dia de treino · reforçado</span>}</div>})}</div>)}
         </div></div>
       </>;
     })()}
@@ -533,8 +563,8 @@ function LunchboxesView({ lunchboxes, recipes, picked, pickedRecipes, toggle, to
     <PageHeading eyebrow={`${lunchboxes.length} sugestões · ${picked.length} escolhidas`} title="Lancheiras completas" text="Sugestões prontas de lanche completo, com ou sem receita. Toque para ver detalhes e escolha as que quer no plano." action={<div className="flex gap-2">{picked.length>0&&<Button variant="ghost" onClick={clear}>Limpar escolhas</Button>}<Button variant="outline" onClick={openImport}><FileUp size={17}/>Importar documento</Button></div>}/>
     <div className="mb-6 flex flex-wrap items-center gap-2">
       <div className="relative w-full sm:max-w-md sm:flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18}/><input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Pesquisar por nome ou ingrediente…" className="h-10 w-full rounded-md border border-input bg-card pl-10 pr-4"/></div>
-      <div className="inline-flex flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1">
-        {([["todas","Todas"],["sem-receita","Sem preparação"],["treino","Dias de treino"],["escolhidas","Escolhidas"]] as const).map(([id,label])=><Button key={id} size="sm" variant={filter===id?"secondary":"ghost"} onClick={()=>setFilter(id)}>{label}</Button>)}
+      <div className="inline-flex h-10 flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1">
+        {([["todas","Todas"],["sem-receita","Sem preparação"],["treino","Dias de treino"],["escolhidas","Escolhidas"]] as const).map(([id,label])=><Button key={id} size="default" variant={filter===id?"secondary":"ghost"} onClick={()=>setFilter(id)}>{label}</Button>)}
       </div>
       <ViewToggle view={view} setView={setView}/>
     </div>

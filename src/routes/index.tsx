@@ -501,7 +501,7 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
   </section>;
 }
 
-function LunchboxesView({ lunchboxes, recipes, picked, pickedRecipes, toggle, toggleRecipe, images, setImage, openImport, clear }: { lunchboxes: Lunchbox[]; recipes: Recipe[]; picked: string[]; pickedRecipes: string[]; toggle:(id:string)=>void; toggleRecipe:(id:string)=>void; images: Record<string,string>; setImage:(id:string,url:string)=>void; openImport:()=>void; clear:()=>void }) {
+function LunchboxesView({ lunchboxes, recipes, picked, pickedRecipes, toggle, toggleRecipe, images, setImage, setRecipeImage, openImport, clear }: { lunchboxes: Lunchbox[]; recipes: Recipe[]; picked: string[]; pickedRecipes: string[]; toggle:(id:string)=>void; toggleRecipe:(id:string)=>void; images: Record<string,string>; setImage:(id:string,url:string)=>void; setRecipeImage:(id:string,url:string)=>void; openImport:()=>void; clear:()=>void }) {
   const [filter, setFilter] = useState<"todas" | "sem-receita" | "treino" | "escolhidas">("todas");
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
@@ -515,6 +515,7 @@ function LunchboxesView({ lunchboxes, recipes, picked, pickedRecipes, toggle, to
     return q.trim().toLowerCase().split(/\s+/).every((word) => hay.includes(word));
   });
   const open = shown.find((b) => b.id === openId) ?? null;
+  const openRecipe = recipes.find((r) => r.id === openRecipeId) ?? null;
   const thumbOf = (b: Lunchbox, i: number) => images[b.id] || b.image_url || fallbacks[i % 3] || lunchbox.url;
   return <section>
     <PageHeading eyebrow={`${lunchboxes.length} sugestões · ${picked.length} escolhidas`} title="Lancheiras completas" text="Sugestões prontas de lanche completo, com ou sem receita. Toque para ver detalhes e escolha as que quer no plano." action={<div className="flex gap-2">{picked.length>0&&<Button variant="ghost" onClick={clear}>Limpar escolhas</Button>}<Button variant="outline" onClick={openImport}><FileUp size={17}/>Importar documento</Button></div>}/>

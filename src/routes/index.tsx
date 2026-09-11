@@ -250,12 +250,18 @@ function Index() {
   async function addChild(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const child: Child = { id: crypto.randomUUID(), name: String(form.get("name")), age: Number(form.get("age")), snacks_per_day: Number(form.get("snacks")), training_days: form.getAll("training").map(Number), training_timing: String(form.get("timing")) };
-    if (sessionId) {
-      const { data, error } = await supabase.from("children").insert({ ...child, user_id: sessionId }).select().single();
-      if (!error && data) setChildren((old) => [...old, data]);
-    } else setChildren((old) => [...old, child]);
-    setPlan([]); setModal(null);
+    const fields = { name: String(form.get("name")), age: Number(form.get("age")), snacks_per_day: Number(form.get("snacks")), training_days: form.getAll("training").map(Number), training_timing: String(form.get("timing")) };
+    if (editingChild) {
+      setChildren((old) => old.map((c) => (c.id === editingChild.id ? { ...c, ...fields } : c)));
+      if (sessionId) await supabase.from("children").update(fields).eq("id", editingChild.id);
+    } else {
+      const child: Child = { id: crypto.randomUUID(), ...fields };
+      if (sessionId) {
+        const { data, error } = await supabase.from("children").insert({ ...child, user_id: sessionId }).select().single();
+        if (!error && data) setChildren((old) => [...old, data]); else setChildren((old) => [...old, child]);
+      } else setChildren((old) => [...old, child]);
+    }
+    setEditingChild(null); setPlan([]); setModal(null);
   }
 
   async function addRecipe(event: FormEvent<HTMLFormElement>) {

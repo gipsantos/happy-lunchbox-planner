@@ -12,3 +12,5 @@
 - [x] Nomes "Lancheira 1/2/3" devem usar a descrição em vez do número
 - [x] Plano em mobile sem scroll lateral (cartões por dia)
 - [x] Imprimir/exportar o plano (tabela) no computador
+- [x] Abrir receita a partir do detalhe da lancheira (plano e lancheiras)
+- [x] Alinhar campos de pesquisa/filtros (Lancheiras e Receitas)

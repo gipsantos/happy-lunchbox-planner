@@ -453,11 +453,15 @@ function ImportForm({ save, signedIn, askLogin }: { save:(result:ImportResult)=>
   </div>;
 }
 
-function RecipesView({ recipes, search, setSearch, images, setImage, openAdd, openImport }: { recipes: Recipe[]; search:string; setSearch:(v:string)=>void; images: Record<string,string>; setImage:(id:string,url:string)=>void; openAdd:()=>void; openImport:()=>void }) {
+function RecipesView({ recipes, search, setSearch, images, setImage, openAdd, openImport, picked, toggle }: { recipes: Recipe[]; search:string; setSearch:(v:string)=>void; images: Record<string,string>; setImage:(id:string,url:string)=>void; openAdd:()=>void; openImport:()=>void; picked:string[]; toggle:(id:string)=>void }) {
   const fallbacks=[muffins.url,lunchbox.url,fruitBoxes.url];
   const [sort,setSort]=useState<"nome"|"tempo"|"idade">("nome");
   const [openId,setOpenId]=useState<string|null>(null);
-  const shown=recipes.filter((r)=>r.name.toLowerCase().includes(search.toLowerCase())).sort((a,b)=>sort==="tempo"?(a.prep_minutes+a.cook_minutes)-(b.prep_minutes+b.cook_minutes):sort==="idade"?a.min_age-b.min_age:a.name.localeCompare(b.name,"pt"));
+  const shown=recipes.filter((r)=>{
+    if (!search.trim()) return true;
+    const hay=[r.name,r.description,...ingredientsOf(r.ingredients).map((i)=>i.name)].join(" ").toLowerCase();
+    return search.trim().toLowerCase().split(/\s+/).every((word)=>hay.includes(word));
+  }).sort((a,b)=>sort==="tempo"?(a.prep_minutes+a.cook_minutes)-(b.prep_minutes+b.cook_minutes):sort==="idade"?a.min_age-b.min_age:a.name.localeCompare(b.name,"pt"));
   const open=shown.find((r)=>r.id===openId)||null;
   return <section><PageHeading eyebrow={`${recipes.length} receitas na coleção`} title="Receitas para dias reais" text="Toque numa receita para ver ingredientes, quantidades e preparação." action={<div className="flex gap-2"><Button variant="outline" onClick={openImport}><FileUp size={17}/>Importar</Button><Button onClick={openAdd}><Plus size={17}/>Adicionar receita</Button></div>}/>
     <div className="mb-6 flex flex-wrap items-center gap-3"><div className="relative max-w-md flex-1"><Search className="absolute left-3 top-3 text-muted-foreground" size={18}/><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Pesquisar receitas…" className="h-11 w-full rounded-md border border-input bg-card pl-10 pr-4"/></div><label className="flex items-center gap-2 text-sm text-muted-foreground"><ArrowUpDown size={15}/><select value={sort} onChange={(e)=>setSort(e.target.value as typeof sort)} className="h-11 rounded-md border border-input bg-card px-3 text-sm text-foreground"><option value="nome">Nome A–Z</option><option value="tempo">Mais rápidas</option><option value="idade">Idade</option></select></label></div>

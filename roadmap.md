@@ -17,3 +17,4 @@
 - [x] Simplificar tabela do plano: só títulos, sem imagens, abrir detalhe ao clicar
 - [x] Cards do plano um pouco mais altos com nome completo em até 2 linhas
 - [ ] Cards do plano com altura estática e nome em até 3 linhas
+- [ ] Juntar botões Exportar/Imprimir/WhatsApp/Guardar/Gerar num menu único

@@ -434,6 +434,7 @@ function PageHeading({ eyebrow, title, text, action }: { eyebrow: string; title:
 function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRecipes, toggleBox, toggleRecipe, images, setImage, plan, familyMode, selectedChild, setSelectedChild, setFamilyMode, period, setPeriod, regenerate, savePlan, openLunchboxes }: { children: Child[]; allChildren: Child[]; recipes: Recipe[]; lunchboxes: Lunchbox[]; picked: string[]; pickedRecipes: string[]; toggleBox:(id:string)=>void; toggleRecipe:(id:string)=>void; images: Record<string,string>; setImage:(table:"recipes"|"lunchboxes"|"children",id:string,url:string)=>void; plan: PlanCell[]; familyMode: boolean; selectedChild: string; setSelectedChild:(v:string)=>void; setFamilyMode:(v:boolean)=>void; period:"week"|"month"; setPeriod:(v:"week"|"month")=>void; regenerate:()=>void; savePlan:()=>void; openLunchboxes:()=>void }) {
   const [open, setOpen] = useState<{ kind: "box" | "recipe"; id: string } | null>(null);
   const [day, setDay] = useState(0);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const openBox = open?.kind === "box" ? lunchboxes.find((b) => b.id === open.id) ?? null : null;
   const openRecipe = open?.kind === "recipe" ? recipes.find((r) => r.id === open.id) ?? null : null;
   const fallbacks = [lunchbox.url, fruitBoxes.url, muffins.url];

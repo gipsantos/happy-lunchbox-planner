@@ -321,7 +321,7 @@ function Index() {
       });
     }
     setPlan(next);
-  }, [pool, recipePool, recipes, children, familyMode, plan.length, genCount]);
+  }, [pool, recipePool, recipes, children, familyMode, plan.length, genCount, period, restoring]);
 
   const visibleChildren = selectedChild === "all" ? children : children.filter((c) => c.id === selectedChild);
   const shopping = useMemo(() => {

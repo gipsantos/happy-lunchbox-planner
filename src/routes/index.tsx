@@ -308,7 +308,7 @@ function Index() {
         {tab === "lancheiras" && <LunchboxesView lunchboxes={lunchboxes} picked={picked} toggle={togglePick} images={images} setImage={(id,url)=>setImage("lunchboxes",id,url)} openImport={() => setModal("import")} clear={() => { setPicked([]); setPlan([]); if (sessionId) supabase.from("lunchbox_selections").delete().eq("user_id", sessionId); }} />}
         {tab === "receitas" && <RecipesView recipes={recipes} search={search} setSearch={setSearch} images={images} setImage={(id,url)=>setImage("recipes",id,url)} openAdd={() => setModal("recipe")} openImport={() => setModal("import")} />}
         {tab === "compras" && <ShoppingView items={shopping} childName={selectedChild === "all" ? "toda a família" : visibleChildren[0]?.name ?? "plano"} />}
-        {tab === "familia" && <FamilyView children={children} openAdd={() => setModal("child")} />}
+        {tab === "familia" && <FamilyView children={children} images={images} setPhoto={(id,url)=>setImage("children",id,url)} openAdd={() => { setEditingChild(null); setModal("child"); }} openEdit={(child)=>{ setEditingChild(child); setModal("child"); }} remove={removeChild} />}
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-border bg-background p-2 md:hidden">

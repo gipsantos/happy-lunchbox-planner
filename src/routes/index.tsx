@@ -487,31 +487,44 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
 function LunchboxesView({ lunchboxes, picked, toggle, images, setImage, openImport, clear }: { lunchboxes: Lunchbox[]; picked: string[]; toggle:(id:string)=>void; images: Record<string,string>; setImage:(id:string,url:string)=>void; openImport:()=>void; clear:()=>void }) {
   const [filter, setFilter] = useState<"todas" | "sem-receita" | "treino" | "escolhidas">("todas");
   const [q, setQ] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [view, setView] = useView("lancheira-vista-lancheiras");
+  const fallbacks = [lunchbox.url, fruitBoxes.url, muffins.url];
   const shown = lunchboxes.filter((b) => {
     if (filter !== "todas" && !(filter === "sem-receita" ? itemsOf(b).every((i) => i.kind === "bought") : filter === "treino" ? b.training_suitable : picked.includes(b.id))) return false;
     if (!q.trim()) return true;
     const hay = [b.name, b.description, ...itemsOf(b).map((i) => i.label), ...ingredientsOf(b.ingredients).map((i) => i.name)].join(" ").toLowerCase();
     return q.trim().toLowerCase().split(/\s+/).every((word) => hay.includes(word));
   });
+  const open = shown.find((b) => b.id === openId) ?? null;
+  const thumbOf = (b: Lunchbox, i: number) => images[b.id] || b.image_url || fallbacks[i % 3];
   return <section>
-    <PageHeading eyebrow={`${lunchboxes.length} sugestões · ${picked.length} escolhidas`} title="Lancheiras completas" text="Sugestões prontas de lanche completo, com ou sem receita. Escolha as que quer no plano semanal." action={<div className="flex gap-2">{picked.length>0&&<Button variant="ghost" onClick={clear}>Limpar escolhas</Button>}<Button variant="outline" onClick={openImport}><FileUp size={17}/>Importar documento</Button></div>}/>
+    <PageHeading eyebrow={`${lunchboxes.length} sugestões · ${picked.length} escolhidas`} title="Lancheiras completas" text="Sugestões prontas de lanche completo, com ou sem receita. Toque para ver detalhes e escolha as que quer no plano." action={<div className="flex gap-2">{picked.length>0&&<Button variant="ghost" onClick={clear}>Limpar escolhas</Button>}<Button variant="outline" onClick={openImport}><FileUp size={17}/>Importar documento</Button></div>}/>
     <div className="mb-6 flex flex-wrap items-center gap-3">
       <div className="relative max-w-md flex-1"><Search className="absolute left-3 top-3 text-muted-foreground" size={18}/><input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Pesquisar por nome ou ingrediente…" className="h-11 w-full rounded-md border border-input bg-card pl-10 pr-4"/></div>
       <div className="inline-flex flex-wrap gap-1 rounded-md border border-border bg-card p-1">
         {([["todas","Todas"],["sem-receita","Sem preparação"],["treino","Dias de treino"],["escolhidas","Escolhidas"]] as const).map(([id,label])=><Button key={id} size="sm" variant={filter===id?"secondary":"ghost"} onClick={()=>setFilter(id)}>{label}</Button>)}
       </div>
+      <ViewToggle view={view} setView={setView}/>
     </div>
-    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{shown.map((b,i)=>{const active=picked.includes(b.id);const items=itemsOf(b);const thumb=images[b.id]||[lunchbox.url,fruitBoxes.url,muffins.url][i%3];return <article key={b.id} className={`rounded-md border bg-card p-5 ${active?"border-primary ring-2 ring-primary/30":"border-border"}`}>
+    {view === "cards" ? <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">{shown.map((b,i)=>{const active=picked.includes(b.id);const items=itemsOf(b);return <article key={b.id} className={`rounded-md border bg-card p-5 ${active?"border-primary ring-2 ring-primary/30":"border-border"}`}>
       <div className="mb-3 flex items-start gap-3">
-        <div className="group relative size-16 shrink-0 overflow-hidden rounded-md bg-muted"><img src={thumb} alt={`Lancheira ${b.name}`} className="size-full object-cover" loading="lazy"/><ImagePicker label="" className="absolute inset-x-1 bottom-1 grid place-items-center px-0 py-0.5 opacity-0 transition group-hover:opacity-100" onPick={(url)=>setImage(b.id,url)}/></div>
-        <h2 className="flex-1 text-2xl leading-tight">{b.name}</h2>
+        <div className="group relative size-16 shrink-0 overflow-hidden rounded-md bg-muted"><img src={thumbOf(b,i)} alt={b.name} className="size-full object-cover" loading="lazy"/><ImagePicker label="" className="absolute inset-x-1 bottom-1 opacity-0 transition group-hover:opacity-100" onPick={(url)=>setImage(b.id,url)}/></div>
+        <button type="button" onClick={()=>setOpenId(b.id)} className="flex-1 text-left text-2xl leading-tight hover:underline">{b.name}</button>
         <button onClick={()=>toggle(b.id)} aria-pressed={active} aria-label={active?`Retirar ${b.name} do plano`:`Usar ${b.name} no plano`} className={`grid size-8 shrink-0 place-items-center rounded-full border ${active?"border-primary bg-primary text-primary-foreground":"border-border text-muted-foreground"}`}>{active?<Check size={16}/>:<Plus size={16}/>}</button>
       </div>
       <p className="text-sm text-muted-foreground">{b.description}</p>
       <ul className="mt-4 space-y-1 text-sm">{items.map((i)=><li key={i.label} className="flex items-center gap-2"><span className={`size-1.5 rounded-full ${i.kind==="recipe"?"bg-primary":"bg-accent"}`}/>{i.label}<span className="text-xs text-muted-foreground">{i.kind==="recipe"?"receita":"comprado"}</span></li>)}</ul>
       <div className="mt-4 flex flex-wrap gap-2 border-t border-border pt-4 text-xs">{b.components.map((c)=><span key={c} className="rounded-full bg-muted px-2 py-1 font-bold text-muted-foreground">{c}</span>)}{b.training_suitable&&<span className="rounded-full bg-accent px-2 py-1 font-bold text-accent-foreground"><Dumbbell size={12} className="mr-1 inline"/>treino</span>}{!b.needs_prep&&<span className="rounded-full bg-leaf-soft px-2 py-1 font-bold text-primary">sem preparação</span>}<span className="ml-auto text-muted-foreground">{b.min_age}–{b.max_age} anos</span></div>
     </article>})}</div>
+    : <ol className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">{shown.map((b,i)=>{const active=picked.includes(b.id);return <li key={b.id} className="flex items-center"><button type="button" onClick={()=>setOpenId(b.id)} className="flex min-w-0 flex-1 items-center gap-4 p-3 text-left transition-colors hover:bg-muted/60">
+      <img src={thumbOf(b,i)} alt="" className="size-14 shrink-0 rounded-md object-cover" loading="lazy"/>
+      <div className="min-w-0 flex-1"><div className="flex items-center gap-2"><h2 className="truncate text-base font-bold">{b.name}</h2>{b.training_suitable&&<Dumbbell size={13} className="shrink-0 text-accent-foreground"/>}{!b.needs_prep&&<span className="shrink-0 rounded-full bg-leaf-soft px-2 text-[11px] font-bold text-primary">sem preparação</span>}</div><p className="truncate text-sm text-muted-foreground">{itemsOf(b).map((it)=>it.label).join(" · ")||b.description}</p></div>
+      <span className="hidden shrink-0 text-xs text-muted-foreground sm:block">{b.min_age}–{b.max_age} anos</span>
+      <ChevronRight size={17} className="shrink-0 text-muted-foreground"/></button>
+      <button type="button" onClick={()=>toggle(b.id)} aria-pressed={active} aria-label={active?`Retirar ${b.name} do plano`:`Usar ${b.name} no plano`} className={`mr-3 grid size-8 shrink-0 place-items-center rounded-full border ${active?"border-primary bg-primary text-primary-foreground":"border-border text-muted-foreground"}`}>{active?<Check size={16}/>:<Plus size={16}/>}</button></li>})}</ol>}
     {!shown.length&&<p className="text-muted-foreground">Ainda não há lancheiras neste filtro.</p>}
+    {open&&<LunchboxDetail box={open} image={thumbOf(open, shown.indexOf(open))} setImage={(url)=>setImage(open.id,url)} picked={picked.includes(open.id)} toggle={()=>toggle(open.id)} close={()=>setOpenId(null)}/>}
   </section>;
 }
 

@@ -113,6 +113,12 @@ function Index() {
       if (!active) return;
       if (recipeData) setRecipes(recipeData);
       if (boxData) setLunchboxes(boxData);
+      const stored: Record<string, string> = {};
+      [...(recipeData ?? []), ...((boxData ?? []) as { id: string; image_url?: string | null }[])].forEach((row) => {
+        const url = storedImage(row as { image_url?: string | null });
+        if (url) stored[(row as { id: string }).id] = url;
+      });
+      setImages((old) => ({ ...stored, ...old }));
       if (auth.user) {
         setSessionId(auth.user.id);
         const [{ data: childData }, { data: pickData }] = await Promise.all([

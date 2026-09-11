@@ -20,6 +20,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          photo_url: string | null
           snacks_per_day: number
           training_days: number[]
           training_timing: string
@@ -31,6 +32,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          photo_url?: string | null
           snacks_per_day?: number
           training_days?: number[]
           training_timing?: string
@@ -42,6 +44,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          photo_url?: string | null
           snacks_per_day?: number
           training_days?: number[]
           training_timing?: string
@@ -85,6 +88,7 @@ export type Database = {
           created_at: string
           description: string
           id: string
+          image_url: string | null
           ingredients: Json
           items: Json
           max_age: number
@@ -101,6 +105,7 @@ export type Database = {
           created_at?: string
           description?: string
           id?: string
+          image_url?: string | null
           ingredients?: Json
           items?: Json
           max_age?: number
@@ -117,6 +122,7 @@ export type Database = {
           created_at?: string
           description?: string
           id?: string
+          image_url?: string | null
           ingredients?: Json
           items?: Json
           max_age?: number

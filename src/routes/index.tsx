@@ -74,6 +74,7 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const [tab, setTab] = useState<Tab>("plano");
+  const [genCount, setGenCount] = useState(0);
   const [children, setChildren] = useState<Child[]>(demoChildren);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [lunchboxes, setLunchboxes] = useState<Lunchbox[]>([]);
@@ -155,24 +156,49 @@ function Index() {
   useEffect(() => {
     if ((!pool.length && !recipes.length) || plan.length) return;
     const next: PlanCell[] = [];
+    const rand = <T,>(list: T[]) => list[Math.floor(Math.random() * list.length)];
     const fits = (box: Lunchbox, age: number, training: boolean) => box.min_age <= age && box.max_age >= age && (!training || box.training_suitable);
+    const usedCommon = new Set<string>();
+    const yesterdayByChild = new Map<string, Set<string>>();
     for (let day = 0; day < 5; day++) {
-      const trainingDay = children.some((c) => c.training_days.includes(day));
-      const common = pool.filter((b) => children.every((c) => fits(b, c.age, c.training_days.includes(day) && trainingDay)))[day % Math.max(pool.length, 1)] ?? pool[day % Math.max(pool.length, 1)];
+      let common: Lunchbox | undefined;
+      if (familyMode && children.length > 1) {
+        const cands = pool.filter((b) => children.every((c) => fits(b, c.age, c.training_days.includes(day))));
+        let fresh = cands.filter((b) => !usedCommon.has(b.id));
+        if (!fresh.length) { usedCommon.clear(); fresh = cands; }
+        common = fresh.length ? rand(fresh) : undefined;
+        if (common) usedCommon.add(common.id);
+      }
       children.forEach((child) => {
+        const usedToday = new Set<string>();
+        const yesterday = yesterdayByChild.get(child.id) ?? new Set<string>();
+        const todayIds: string[] = [];
         for (let snack = 1; snack <= child.snacks_per_day; snack++) {
           const training = child.training_days.includes(day);
           const suitable = pool.filter((b) => fits(b, child.age, training));
-          const box = snack === 1 && common && fits(common, child.age, training) ? common : suitable[(day + snack) % Math.max(suitable.length, 1)] ?? common;
-          if (box) { next.push({ childId: child.id, day, snack, recipeId: null, lunchboxId: box.id, training }); continue; }
+          let box: Lunchbox | undefined;
+          if (snack === 1 && common && fits(common, child.age, training)) box = common;
+          else {
+            let fresh = suitable.filter((b) => !usedToday.has(b.id) && !yesterday.has(b.id));
+            if (!fresh.length) fresh = suitable.filter((b) => !usedToday.has(b.id));
+            box = fresh.length ? rand(fresh) : (suitable.length ? rand(suitable) : undefined);
+          }
+          if (box) {
+            usedToday.add(box.id); todayIds.push(box.id);
+            next.push({ childId: child.id, day, snack, recipeId: null, lunchboxId: box.id, training });
+            continue;
+          }
           const okRecipes = recipes.filter((r) => r.min_age <= child.age && r.max_age >= child.age && (!training || r.training_suitable));
-          const recipe = okRecipes[(day + snack) % Math.max(okRecipes.length, 1)] ?? recipes[0];
-          if (recipe) next.push({ childId: child.id, day, snack, recipeId: recipe.id, lunchboxId: null, training });
+          let freshR = okRecipes.filter((r) => !usedToday.has(r.id) && !yesterday.has(r.id));
+          if (!freshR.length) freshR = okRecipes.filter((r) => !usedToday.has(r.id));
+          const recipe = freshR.length ? rand(freshR) : (okRecipes.length ? rand(okRecipes) : recipes[0]);
+          if (recipe) { usedToday.add(recipe.id); todayIds.push(recipe.id); next.push({ childId: child.id, day, snack, recipeId: recipe.id, lunchboxId: null, training }); }
         }
+        yesterdayByChild.set(child.id, new Set(todayIds));
       });
     }
     setPlan(next);
-  }, [pool, recipes, children, plan.length]);
+  }, [pool, recipes, children, familyMode, plan.length, genCount]);
 
   const visibleChildren = selectedChild === "all" ? children : children.filter((c) => c.id === selectedChild);
   const shopping = useMemo(() => {
@@ -198,6 +224,7 @@ function Index() {
   }, [plan, recipes, lunchboxes, visibleChildren]);
 
   function regenerate() {
+    setGenCount((c) => c + 1);
     setPlan([]);
     flash(picked.length ? "Plano gerado apenas com as lancheiras que escolheu." : "Plano ajustado às idades e aos dias de treino.");
   }

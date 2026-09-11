@@ -555,8 +555,8 @@ function LunchboxesView({ lunchboxes, recipes, picked, pickedRecipes, toggle, to
     <PageHeading eyebrow={`${lunchboxes.length} sugestões · ${picked.length} escolhidas`} title="Lancheiras completas" text="Sugestões prontas de lanche completo, com ou sem receita. Toque para ver detalhes e escolha as que quer no plano." action={<div className="flex gap-2">{picked.length>0&&<Button variant="ghost" onClick={clear}>Limpar escolhas</Button>}<Button variant="outline" onClick={openImport}><FileUp size={17}/>Importar documento</Button></div>}/>
     <div className="mb-6 flex flex-wrap items-center gap-2">
       <div className="relative w-full sm:max-w-md sm:flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18}/><input value={q} onChange={(e)=>setQ(e.target.value)} placeholder="Pesquisar por nome ou ingrediente…" className="h-10 w-full rounded-md border border-input bg-card pl-10 pr-4"/></div>
-      <div className="inline-flex flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1">
-        {([["todas","Todas"],["sem-receita","Sem preparação"],["treino","Dias de treino"],["escolhidas","Escolhidas"]] as const).map(([id,label])=><Button key={id} size="sm" variant={filter===id?"secondary":"ghost"} onClick={()=>setFilter(id)}>{label}</Button>)}
+      <div className="inline-flex h-10 flex-wrap items-center gap-1 rounded-md border border-border bg-card p-1">
+        {([["todas","Todas"],["sem-receita","Sem preparação"],["treino","Dias de treino"],["escolhidas","Escolhidas"]] as const).map(([id,label])=><Button key={id} size="default" variant={filter===id?"secondary":"ghost"} onClick={()=>setFilter(id)}>{label}</Button>)}
       </div>
       <ViewToggle view={view} setView={setView}/>
     </div>

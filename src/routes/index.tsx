@@ -432,7 +432,7 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
   const openBox = open?.kind === "box" ? lunchboxes.find((b) => b.id === open.id) ?? null : null;
   const openRecipe = open?.kind === "recipe" ? recipes.find((r) => r.id === open.id) ?? null : null;
   const fallbacks = [lunchbox.url, fruitBoxes.url, muffins.url];
-  const imageFor = (id: string, stored: string | null | undefined, i: number) => images[id] || stored || fallbacks[i % 3];
+  const imageFor = (id: string, stored: string | null | undefined, i: number) => images[id] || stored || fallbacks[i % 3] || lunchbox.url;
   return <section><PageHeading eyebrow={period === "week" ? "Semana de 14 a 18 de setembro" : "Setembro de 2026 · 4 semanas"} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana equilibrada" : "Um mês equilibrado"}, adaptado a cada idade e aos dias com mais energia. Toque num lanche para ver os detalhes.`} action={<div className="flex gap-2"><Button variant="outline" onClick={savePlan}><Check size={17}/>Guardar</Button><Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button></div>}/>
     <div className="mb-6 flex flex-wrap items-center gap-3">
       <div className="inline-flex rounded-md border border-border bg-card p-1"><Button size="sm" variant={period === "week" ? "secondary":"ghost"} onClick={()=>setPeriod("week")}>Semana</Button><Button size="sm" variant={period === "month" ? "secondary":"ghost"} onClick={()=>setPeriod("month")}>Mês</Button></div>
@@ -497,7 +497,7 @@ function LunchboxesView({ lunchboxes, picked, toggle, images, setImage, openImpo
     return q.trim().toLowerCase().split(/\s+/).every((word) => hay.includes(word));
   });
   const open = shown.find((b) => b.id === openId) ?? null;
-  const thumbOf = (b: Lunchbox, i: number) => images[b.id] || b.image_url || fallbacks[i % 3];
+  const thumbOf = (b: Lunchbox, i: number) => images[b.id] || b.image_url || fallbacks[i % 3] || lunchbox.url;
   return <section>
     <PageHeading eyebrow={`${lunchboxes.length} sugestões · ${picked.length} escolhidas`} title="Lancheiras completas" text="Sugestões prontas de lanche completo, com ou sem receita. Toque para ver detalhes e escolha as que quer no plano." action={<div className="flex gap-2">{picked.length>0&&<Button variant="ghost" onClick={clear}>Limpar escolhas</Button>}<Button variant="outline" onClick={openImport}><FileUp size={17}/>Importar documento</Button></div>}/>
     <div className="mb-6 flex flex-wrap items-center gap-3">
@@ -579,7 +579,7 @@ function RecipesView({ recipes, search, setSearch, images, setImage, openAdd, op
     return search.trim().toLowerCase().split(/\s+/).every((word)=>hay.includes(word));
   }).sort((a,b)=>sort==="tempo"?(a.prep_minutes+a.cook_minutes)-(b.prep_minutes+b.cook_minutes):sort==="idade"?a.min_age-b.min_age:a.name.localeCompare(b.name,"pt"));
   const open=shown.find((r)=>r.id===openId)||null;
-  const thumbOf=(r:Recipe,i:number)=>images[r.id]||r.image_url||fallbacks[i%3];
+  const thumbOf=(r:Recipe,i:number)=>images[r.id]||r.image_url||fallbacks[i%3]||muffins.url;
   return <section><PageHeading eyebrow={`${recipes.length} receitas na coleção`} title="Receitas para dias reais" text="Toque numa receita para ver ingredientes, quantidades e preparação." action={<div className="flex gap-2"><Button variant="outline" onClick={openImport}><FileUp size={17}/>Importar</Button><Button onClick={openAdd}><Plus size={17}/>Adicionar receita</Button></div>}/>
     <div className="mb-6 flex flex-wrap items-center gap-3"><div className="relative max-w-md flex-1"><Search className="absolute left-3 top-3 text-muted-foreground" size={18}/><input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Pesquisar por nome ou ingrediente…" className="h-11 w-full rounded-md border border-input bg-card pl-10 pr-4"/></div><label className="flex items-center gap-2 text-sm text-muted-foreground"><ArrowUpDown size={15}/><select value={sort} onChange={(e)=>setSort(e.target.value as typeof sort)} className="h-11 rounded-md border border-input bg-card px-3 text-sm text-foreground"><option value="nome">Nome A–Z</option><option value="tempo">Mais rápidas</option><option value="idade">Idade</option></select></label><ViewToggle view={view} setView={setView}/></div>
     {view==="lista" ? <ol className="divide-y divide-border overflow-hidden rounded-md border border-border bg-card">{shown.map((r,i)=>{const active=picked.includes(r.id);return <li key={r.id} className="flex items-center"><button type="button" onClick={()=>setOpenId(r.id)} className="flex min-w-0 flex-1 items-center gap-4 p-3 text-left transition-colors hover:bg-muted/60">

@@ -18,3 +18,4 @@
 - [x] Cards do plano um pouco mais altos com nome completo em até 2 linhas
 - [ ] Cards do plano com altura estática e nome em até 3 linhas
 - [ ] Juntar botões Exportar/Imprimir/WhatsApp/Guardar/Gerar num menu único
+- [ ] Alinhar altura do campo de pesquisa com os botões de filtro em Lancheiras/Receitas

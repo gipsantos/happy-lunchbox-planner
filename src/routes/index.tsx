@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Apple, ArrowUpDown, CalendarDays, Camera, Check, ChevronRight, Clock3, Dumbbell, FileUp, Image as ImageIcon, LayoutGrid, List, LogIn, MessageCircle, Plus, Sandwich, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Apple, ArrowUpDown, Pencil, CalendarDays, Camera, Check, ChevronRight, Clock3, Dumbbell, FileUp, Image as ImageIcon, LayoutGrid, List, LogIn, MessageCircle, Plus, Sandwich, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
@@ -93,7 +93,7 @@ function findRecipeForItem(recipes: Recipe[], label: string) {
   return recipes.find((r) => l.includes(r.name.toLowerCase()) || r.name.toLowerCase().includes(l)) ?? null;
 }
 
-function LunchboxDetail({ box, image, setImage, picked, toggle, close, recipes, openRecipe }: { box: Lunchbox; image: string; setImage:(url:string)=>void; picked:boolean; toggle:()=>void; close:()=>void; recipes: Recipe[]; openRecipe?:(id:string)=>void }) {
+function LunchboxDetail({ box, image, setImage, picked, toggle, close, recipes, openRecipe, extra }: { box: Lunchbox; image: string; setImage:(url:string)=>void; picked:boolean; toggle:()=>void; close:()=>void; recipes: Recipe[]; openRecipe?:(id:string)=>void; extra?: ReactNode }) {
   return <Modal title={box.name} close={close}>
     <div className="relative mb-5"><img src={image} alt={box.name} className="max-h-48 w-full rounded-md object-cover"/><ImagePicker label="Alterar imagem" className="absolute bottom-3 right-3 w-40" onPick={setImage}/></div>
     <p className="mb-4 text-sm text-muted-foreground">{box.description}</p>
@@ -101,11 +101,11 @@ function LunchboxDetail({ box, image, setImage, picked, toggle, close, recipes, 
     <h3 className="mb-2 text-sm font-extrabold uppercase tracking-wide text-muted-foreground">O que vai na lancheira</h3>
     <ul className="mb-5 space-y-1 text-sm">{itemsOf(box).map((i)=>{const rec=i.kind==="recipe"?findRecipeForItem(recipes,i.label):null;const inner=<><span className={`size-1.5 shrink-0 rounded-full ${i.kind==="recipe"?"bg-primary":"bg-accent"}`}/><span className="flex-1">{i.label} <span className="text-xs text-muted-foreground">{i.kind==="recipe"?"receita":"comprado"}</span></span></>;return <li key={i.label}>{rec&&openRecipe?<button type="button" onClick={()=>openRecipe(rec.id)} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left font-bold text-primary transition-colors hover:bg-leaf-soft">{inner}<ChevronRight size={15} className="shrink-0"/></button>:<div className="flex items-center gap-2 px-2 py-1.5">{inner}</div>}</li>})}</ul>
     {ingredientsOf(box.ingredients).length>0&&<><h3 className="mb-2 text-sm font-extrabold uppercase tracking-wide text-muted-foreground">Para comprar</h3><ul className="mb-5 space-y-1 text-sm">{ingredientsOf(box.ingredients).map((ing,i)=><li key={i} className="flex justify-between gap-4 border-b border-border pb-1"><span>{ing.name}</span><span className="shrink-0 text-muted-foreground">{ing.quantity} {ing.unit}</span></li>)}</ul></>}
-    <Button className="w-full" variant={picked?"secondary":"default"} onClick={toggle}>{picked?<><Check size={17}/>No plano semanal — retirar</>:<><Plus size={17}/>Adicionar ao plano semanal</>}</Button>
+    {extra ?? <Button className="w-full" variant={picked?"secondary":"default"} onClick={toggle}>{picked?<><Check size={17}/>No plano semanal — retirar</>:<><Plus size={17}/>Adicionar ao plano semanal</>}</Button>}
   </Modal>;
 }
 
-function RecipeDetail({ recipe, image, setImage, picked, toggle, close }: { recipe: Recipe; image: string; setImage:(url:string)=>void; picked:boolean; toggle:()=>void; close:()=>void }) {
+function RecipeDetail({ recipe, image, setImage, picked, toggle, close, extra }: { recipe: Recipe; image: string; setImage:(url:string)=>void; picked:boolean; toggle:()=>void; close:()=>void; extra?: ReactNode }) {
   return <Modal title={recipe.name} close={close}>
     <div className="relative mb-5"><img src={image} alt={recipe.name} className="max-h-48 w-full rounded-md object-cover"/><ImagePicker label="Alterar imagem" className="absolute bottom-3 right-3 w-40" onPick={setImage}/></div>
     <p className="mb-4 text-sm text-muted-foreground">{recipe.description}</p>
@@ -113,7 +113,7 @@ function RecipeDetail({ recipe, image, setImage, picked, toggle, close }: { reci
     <h3 className="mb-2 text-sm font-extrabold uppercase tracking-wide text-muted-foreground">Ingredientes</h3>
     <ul className="mb-5 space-y-1 text-sm">{ingredientsOf(recipe.ingredients).map((ing,i)=><li key={i} className="flex justify-between gap-4 border-b border-border pb-1"><span>{ing.name}</span><span className="shrink-0 text-muted-foreground">{ing.quantity} {ing.unit}</span></li>)}</ul>
     {recipe.instructions.length>0&&<><h3 className="mb-2 text-sm font-extrabold uppercase tracking-wide text-muted-foreground">Preparação</h3><ol className="list-decimal space-y-2 pl-5 text-sm">{recipe.instructions.map((step,i)=><li key={i}>{step}</li>)}</ol></>}
-    <Button className="mt-6 w-full" variant={picked?"secondary":"default"} onClick={toggle}>{picked?<><Check size={17}/>No plano semanal — retirar</>:<><Plus size={17}/>Adicionar ao plano semanal</>}</Button>
+    {extra ?? <Button className="mt-6 w-full" variant={picked?"secondary":"default"} onClick={toggle}>{picked?<><Check size={17}/>No plano semanal — retirar</>:<><Plus size={17}/>Adicionar ao plano semanal</>}</Button>}
   </Modal>;
 }
 
@@ -532,6 +532,7 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
   const [weekIndex, setWeekIndex] = useState(0);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [edit, setEdit] = useState<PlanCell | null>(null);
+  const [planTarget, setPlanTarget] = useState<PlanCell | null>(null);
   const [swapping, setSwapping] = useState(false);
   const [swapQuery, setSwapQuery] = useState("");
   const actionsRef = useRef<HTMLDivElement>(null);
@@ -701,6 +702,17 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
     }
     window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
   }
+  function planActions(cell: PlanCell) {
+    const target = { childId: cell.childId, day: cell.day, snack: cell.snack };
+    return <div className="space-y-2 border-t border-border pt-4">
+      <p className="text-sm font-bold">Este lanche no plano</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Button type="button" variant="outline" onClick={()=>{ setOpen(null); setPlanTarget(null); setSwapping(false); setEdit(cell); }}><Pencil size={16}/>Editar texto</Button>
+        <Button type="button" variant="outline" onClick={()=>{ setOpen(null); setPlanTarget(null); setSwapQuery(""); setSwapping(true); setEdit(cell); }}><ArrowUpDown size={16}/>Escolher outra opção</Button>
+      </div>
+      <Button type="button" variant="ghost" className="w-full text-berry" onClick={()=>{ removeCell(target); setOpen(null); setPlanTarget(null); }}><X size={16}/>Retirar do plano</Button>
+    </div>;
+  }
   return <section><PageHeading eyebrow={period === "week" ? `Semana de ${rangeLabel(0)}` : `4 semanas · ${shortLabel(dateAt(0, 0))} a ${shortLabel(dateAt(4, 3))}`} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana equilibrada" : "Um mês equilibrado"}, adaptado a cada idade e aos dias com mais energia. Toque num lanche para ver os detalhes.`}/>
     <div className="mb-6 flex flex-wrap items-center gap-3 print:hidden">
       <Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button>
@@ -737,7 +749,7 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
           <button
             key={cell.snack}
             type="button"
-            onClick={() => { setSwapping(false); setEdit(cell); }}
+            onClick={() => { setSwapping(false); if (id) { setPlanTarget(cell); setOpen({ kind: box ? "box" : "recipe", id }); } else setEdit(cell); }}
             className="mb-2 flex h-[4.5rem] w-full flex-col justify-center rounded-md border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary hover:bg-muted/60"
           >
             <span className="mb-1 flex items-center gap-2">
@@ -811,8 +823,8 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
         </form>}
       </Modal>;
     })()}
-    {openBox && <LunchboxDetail box={openBox} image={imageFor(openBox.id, openBox.image_url, 0)} setImage={(url)=>setImage("lunchboxes",openBox.id,url)} picked={picked.includes(openBox.id)} toggle={()=>toggleBox(openBox.id)} close={()=>setOpen(null)} recipes={recipes} openRecipe={(id)=>setOpen({kind:"recipe",id})}/>}
-    {openRecipe && <RecipeDetail recipe={openRecipe} image={imageFor(openRecipe.id, openRecipe.image_url, 1)} setImage={(url)=>setImage("recipes",openRecipe.id,url)} picked={pickedRecipes.includes(openRecipe.id)} toggle={()=>toggleRecipe(openRecipe.id)} close={()=>setOpen(null)}/>}
+    {openBox && <LunchboxDetail box={openBox} image={imageFor(openBox.id, openBox.image_url, 0)} setImage={(url)=>setImage("lunchboxes",openBox.id,url)} picked={picked.includes(openBox.id)} toggle={()=>toggleBox(openBox.id)} close={()=>{setOpen(null);setPlanTarget(null);}} recipes={recipes} openRecipe={(id)=>setOpen({kind:"recipe",id})} extra={planTarget ? planActions(planTarget) : undefined}/>}
+    {openRecipe && <RecipeDetail recipe={openRecipe} image={imageFor(openRecipe.id, openRecipe.image_url, 1)} setImage={(url)=>setImage("recipes",openRecipe.id,url)} picked={pickedRecipes.includes(openRecipe.id)} toggle={()=>toggleRecipe(openRecipe.id)} close={()=>{setOpen(null);setPlanTarget(null);}} extra={planTarget && openRecipe.id === planTarget.recipeId ? planActions(planTarget) : undefined}/>}
     <div className="mt-6 flex items-center gap-3 border-l-4 border-primary bg-leaf-soft p-4 text-sm"><Check className="shrink-0 text-primary"/><p><b>Lanche completo:</b> cada sugestão combina hidratos, proteína, fruta ou vegetal e água. Nos treinos, a porção e a energia são reforçadas.</p></div>
   </section>;
 }

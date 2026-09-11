@@ -173,6 +173,7 @@ function Index() {
   const [period, setPeriod] = useState<"week" | "month">("week");
   const [weekStartIso, setWeekStartIso] = useState("");
   const [restoring, setRestoring] = useState(true);
+  const [cleared, setCleared] = useState(false);
   const [selectedChild, setSelectedChild] = useState("all");
 
   const [modal, setModal] = useState<"child" | "recipe" | "import" | null>(null);
@@ -276,7 +277,7 @@ function Index() {
   const recipePool = useMemo(() => recipes.filter((r) => pickedRecipes.includes(r.id)), [recipes, pickedRecipes]);
 
   useEffect(() => {
-    if (restoring || (!pool.length && !recipes.length) || plan.length) return;
+    if (restoring || cleared || (!pool.length && !recipes.length) || plan.length) return;
     type Cand = { id: string; box?: Lunchbox; recipe?: Recipe };
     const next: PlanCell[] = [];
     const rand = <T,>(list: T[]) => list[Math.floor(Math.random() * list.length)];
@@ -328,7 +329,7 @@ function Index() {
       });
     }
     setPlan(next);
-  }, [pool, recipePool, recipes, children, familyMode, plan.length, genCount, period, restoring]);
+  }, [pool, recipePool, recipes, children, familyMode, plan.length, genCount, period, restoring, cleared]);
 
   const visibleChildren = selectedChild === "all" ? children : children.filter((c) => c.id === selectedChild);
   const shopping = useMemo(() => {
@@ -353,8 +354,35 @@ function Index() {
     return [...totals].sort(([a], [b]) => a.localeCompare(b));
   }, [plan, recipes, lunchboxes, visibleChildren]);
 
+  function replaceCell(target: { childId: string; day: number; snack: number }, pick: { kind: "box" | "recipe"; id: string }) {
+    setPlan((old) => old.map((c) => (c.childId === target.childId && c.day === target.day && c.snack === target.snack
+      ? { ...c, lunchboxId: pick.kind === "box" ? pick.id : null, recipeId: pick.kind === "recipe" ? pick.id : null }
+      : c)));
+    flash("Lanche alterado.");
+  }
+
+  function removeCell(target: { childId: string; day: number; snack: number }) {
+    setPlan((old) => old.filter((c) => !(c.childId === target.childId && c.day === target.day && c.snack === target.snack)));
+    flash("Lanche retirado do plano.");
+  }
+
+  async function clearPlan() {
+    setCleared(true);
+    setPlan([]);
+    if (sessionId) {
+      const { data: old } = await supabase.from("meal_plans").select("id").eq("user_id", sessionId);
+      if (old?.length) {
+        const ids = old.map((row) => row.id);
+        await supabase.from("plan_items").delete().in("plan_id", ids);
+        await supabase.from("meal_plans").delete().in("id", ids);
+      }
+    }
+    flash("Plano limpo. Use \u201cGerar novo plano\u201d quando quiser começar de novo.");
+  }
+
   function regenerate() {
     setGenCount((c) => c + 1);
+    setCleared(false);
     setPlan([]);
     flash(picked.length || pickedRecipes.length ? "Novo plano gerado apenas com as sugestões que escolheu." : "Novo plano ajustado às idades e aos dias de treino.");
   }
@@ -470,7 +498,7 @@ function Index() {
           <p className="flex-1"><b>Está a experimentar sem conta.</b> Os perfis, as escolhas e o plano são apenas de demonstração e desaparecem ao fechar o separador. Entre para guardar tudo.</p>
           <Button size="sm" onClick={goLogin} className="shrink-0"><LogIn size={16}/>Entrar e guardar</Button>
         </div>}
-        {tab === "plano" && <PlanView children={visibleChildren} allChildren={children} recipes={recipes} lunchboxes={lunchboxes} picked={picked} pickedRecipes={pickedRecipes} toggleBox={togglePick} toggleRecipe={toggleRecipe} images={images} setImage={setImage} plan={plan} familyMode={familyMode} selectedChild={selectedChild} setSelectedChild={setSelectedChild} setFamilyMode={setFamilyMode} period={period} setPeriod={(v)=>{ setPeriod(v); setPlan([]); }} weekStartIso={weekStartIso} regenerate={regenerate} savePlan={savePlan} openLunchboxes={() => setTab("lancheiras")} />}
+        {tab === "plano" && <PlanView children={visibleChildren} allChildren={children} recipes={recipes} lunchboxes={lunchboxes} picked={picked} pickedRecipes={pickedRecipes} toggleBox={togglePick} toggleRecipe={toggleRecipe} images={images} setImage={setImage} plan={plan} familyMode={familyMode} selectedChild={selectedChild} setSelectedChild={setSelectedChild} setFamilyMode={setFamilyMode} period={period} setPeriod={(v)=>{ setPeriod(v); setPlan([]); }} weekStartIso={weekStartIso} regenerate={regenerate} savePlan={savePlan} replaceCell={replaceCell} removeCell={removeCell} clearPlan={clearPlan} openLunchboxes={() => setTab("lancheiras")} />}
 
         {tab === "lancheiras" && <LunchboxesView lunchboxes={lunchboxes} recipes={recipes} picked={picked} pickedRecipes={pickedRecipes} toggle={togglePick} toggleRecipe={toggleRecipe} images={images} setImage={(id,url)=>setImage("lunchboxes",id,url)} setRecipeImage={(id,url)=>setImage("recipes",id,url)} openImport={() => setModal("import")} clear={() => { setPicked([]); setPlan([]); if (sessionId) supabase.from("lunchbox_selections").delete().eq("user_id", sessionId); }} />}
         {tab === "receitas" && <RecipesView recipes={recipes} search={search} setSearch={setSearch} images={images} setImage={(id,url)=>setImage("recipes",id,url)} openAdd={() => setModal("recipe")} openImport={() => setModal("import")} picked={pickedRecipes} toggle={toggleRecipe} />}

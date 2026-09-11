@@ -89,6 +89,7 @@ function Index() {
   const [notice, setNotice] = useState("");
 
   const [images, setImages] = useState<Record<string, string>>({});
+  const [editingChild, setEditingChild] = useState<Child | null>(null);
 
   function flash(message: string) {
     setNotice(message);

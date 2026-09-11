@@ -1,8 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Apple, ArrowUpDown, CalendarDays, Camera, Check, ChevronRight, Clock3, Dumbbell, FileUp, Image as ImageIcon, LayoutGrid, List, LogIn, MessageCircle, Plus, Sandwich, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
 import type { Tables } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { importPlanText, type ImportResult } from "@/lib/import.functions";
@@ -161,6 +160,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>("plano");
   const [genCount, setGenCount] = useState(0);
   const [children, setChildren] = useState<Child[]>(demoChildren);
@@ -175,14 +175,21 @@ function Index() {
   const [restoring, setRestoring] = useState(true);
   const [selectedChild, setSelectedChild] = useState("all");
 
-  const [modal, setModal] = useState<"child" | "recipe" | "auth" | "import" | null>(null);
+  const [modal, setModal] = useState<"child" | "recipe" | "import" | null>(null);
   const [search, setSearch] = useState("");
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [notice, setNotice] = useState("");
 
   const [images, setImages] = useState<Record<string, string>>({});
   const [editingChild, setEditingChild] = useState<Child | null>(null);
+
+  function goLogin() { navigate({ to: "/auth" }); }
+
+  async function signOut() {
+    await supabase.auth.signOut();
+    setSessionId(null);
+    flash("Sessão terminada.");
+  }
 
   function flash(message: string) {
     setNotice(message);
@@ -367,7 +374,7 @@ function Index() {
   }
 
   async function savePlan() {
-    if (!sessionId) { setModal("auth"); return; }
+    if (!sessionId) { goLogin(); return; }
     const chosenChild = selectedChild === "all" ? null : selectedChild;
     const start = weekStartIso ? parseIso(weekStartIso) : mondayOf();
     const { data: old } = await supabase.from("meal_plans").select("id").eq("user_id", sessionId);
@@ -400,7 +407,7 @@ function Index() {
 
 
   async function saveImport(result: ImportResult) {
-    if (!sessionId) { setModal("auth"); return; }
+    if (!sessionId) { goLogin(); return; }
     const newRecipes = result.recipes.map((r) => ({ ...r, user_id: sessionId }));
     const newBoxes = result.lunchboxes.map((b) => ({ ...b, user_id: sessionId, source: "import" }));
     const [recipeResult, boxResult] = await Promise.all([
@@ -437,22 +444,10 @@ function Index() {
     const form = new FormData(event.currentTarget);
     const ingredients = String(form.get("ingredients")).split("\n").filter(Boolean).map((line) => ({ name: line.trim(), quantity: 1, unit: "un" }));
     const payload = { user_id: sessionId, name: String(form.get("name")), description: String(form.get("description")), min_age: Number(form.get("minAge")), max_age: 18, prep_minutes: Number(form.get("time")), portions: Number(form.get("portions")), ingredients, nutrition_tags: form.getAll("nutrition").map(String), meal_components: form.getAll("components").map(String), training_suitable: form.get("training") === "on", freezable: form.get("freezable") === "on" };
-    if (!sessionId) { setModal("auth"); return; }
+    if (!sessionId) { goLogin(); return; }
     const { data, error } = await supabase.from("recipes").insert(payload).select().single();
     if (!error && data) setRecipes((old) => [...old, data]);
     setModal(null);
-  }
-
-  async function authenticate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); const form = new FormData(event.currentTarget);
-    const email = String(form.get("email")); const password = String(form.get("password"));
-    const result = authMode === "login" ? await supabase.auth.signInWithPassword({ email, password }) : await supabase.auth.signUp({ email, password });
-    if (result.error) setNotice(result.error.message); else if (result.data.user) { setSessionId(result.data.user.id); setModal(null); setNotice(authMode === "signup" && !result.data.session ? "Confirme o email para entrar." : "Sessão iniciada."); }
-  }
-
-  async function googleLogin() {
-    const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
-    if (result.error) setNotice(result.error.message);
   }
 
   const tabs = ([['plano','Plano',CalendarDays],['lancheiras','Lancheiras',Sandwich],['receitas','Receitas',UtensilsCrossed],['compras','Compras',ShoppingBasket],['familia','Família',UserRound]] as const);
@@ -465,7 +460,7 @@ function Index() {
           <nav className="ml-auto hidden items-center gap-1 md:flex" aria-label="Navegação principal">
             {tabs.map(([id,label,Icon]) => <Button key={id} variant={tab === id ? "secondary" : "ghost"} onClick={() => setTab(id)}><Icon size={17}/>{label}</Button>)}
           </nav>
-          {sessionId ? <span className="hidden rounded-full bg-leaf-soft px-3 py-1 text-xs font-bold text-primary sm:block">Plano guardado</span> : <Button size="sm" variant="outline" onClick={() => setModal("auth")}><LogIn size={16}/>Entrar</Button>}
+          {sessionId ? <Button size="sm" variant="ghost" onClick={signOut}>Sair</Button> : <Button size="sm" variant="outline" onClick={goLogin}><LogIn size={16}/>Entrar</Button>}
         </div>
       </header>
 
@@ -473,7 +468,7 @@ function Index() {
         {notice && <div className="fixed right-5 top-20 z-50 max-w-xs rounded-md bg-foreground px-4 py-3 text-sm text-background shadow-xl">{notice}</div>}
         {!sessionId && <div className="mb-6 flex flex-col gap-3 rounded-md border-l-4 border-berry bg-card p-4 text-sm sm:flex-row sm:items-center print:hidden">
           <p className="flex-1"><b>Está a experimentar sem conta.</b> Os perfis, as escolhas e o plano são apenas de demonstração e desaparecem ao fechar o separador. Entre para guardar tudo.</p>
-          <Button size="sm" onClick={() => setModal("auth")} className="shrink-0"><LogIn size={16}/>Entrar e guardar</Button>
+          <Button size="sm" onClick={goLogin} className="shrink-0"><LogIn size={16}/>Entrar e guardar</Button>
         </div>}
         {tab === "plano" && <PlanView children={visibleChildren} allChildren={children} recipes={recipes} lunchboxes={lunchboxes} picked={picked} pickedRecipes={pickedRecipes} toggleBox={togglePick} toggleRecipe={toggleRecipe} images={images} setImage={setImage} plan={plan} familyMode={familyMode} selectedChild={selectedChild} setSelectedChild={setSelectedChild} setFamilyMode={setFamilyMode} period={period} setPeriod={(v)=>{ setPeriod(v); setPlan([]); }} weekStartIso={weekStartIso} regenerate={regenerate} savePlan={savePlan} openLunchboxes={() => setTab("lancheiras")} />}
 
@@ -486,7 +481,7 @@ function Index() {
       <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-border bg-background p-2 md:hidden">
         {tabs.map(([id,label,Icon]) => <Button key={id} variant="ghost" className={tab === id ? "text-primary" : ""} onClick={() => setTab(id)}><span className="flex flex-col items-center text-xs"><Icon size={18}/>{label}</span></Button>)}
       </nav>
-      {modal && <Modal title={modal === "child" ? (editingChild ? `Editar ${editingChild.name}` : "Adicionar criança") : modal === "recipe" ? "Nova receita" : modal === "import" ? "Importar plano ou receitas" : "Guardar os meus planos"} close={() => { setModal(null); setEditingChild(null); }}>{modal === "child" ? <ChildForm submit={addChild} child={editingChild}/> : modal === "recipe" ? <RecipeForm submit={addRecipe}/> : modal === "import" ? <ImportForm save={saveImport} signedIn={Boolean(sessionId)} askLogin={() => setModal("auth")}/> : <AuthForm submit={authenticate} google={googleLogin} mode={authMode} setMode={setAuthMode}/>}</Modal>}
+      {modal && <Modal title={modal === "child" ? (editingChild ? `Editar ${editingChild.name}` : "Adicionar criança") : modal === "recipe" ? "Nova receita" : "Importar plano ou receitas"} close={() => { setModal(null); setEditingChild(null); }}>{modal === "child" ? <ChildForm submit={addChild} child={editingChild}/> : modal === "recipe" ? <RecipeForm submit={addRecipe}/> : <ImportForm save={saveImport} signedIn={Boolean(sessionId)} askLogin={goLogin}/>}</Modal>}
     </div>
   );
 }
@@ -775,4 +770,3 @@ function Modal({title,close,children}:{title:string;close:()=>void;children:Reac
 const inputClass="h-11 w-full rounded-md border border-input bg-background px-3 text-sm";
 function ChildForm({submit,child}:{submit:(e:FormEvent<HTMLFormElement>)=>void;child?:Child|null}) { return <form onSubmit={submit} className="space-y-5"><label className="block text-sm font-bold">Nome<input name="name" required defaultValue={child?.name ?? ""} className={`${inputClass} mt-2`}/></label><div className="grid grid-cols-2 gap-4"><label className="text-sm font-bold">Idade<input name="age" type="number" min="2" max="18" required defaultValue={child?.age ?? ""} className={`${inputClass} mt-2`}/></label><label className="text-sm font-bold">Lanches por dia<select name="snacks" defaultValue={String(child?.snacks_per_day ?? 1)} className={`${inputClass} mt-2`}><option value="1">1 lanche</option><option value="2">2 lanches</option><option value="3">3 lanches</option></select></label></div><fieldset><legend className="mb-2 text-sm font-bold">Dias de treino</legend><div className="flex flex-wrap gap-2">{weekDays.map((d,i)=><label key={d} className="rounded-md border border-border px-3 py-2 text-sm"><input type="checkbox" name="training" value={i} defaultChecked={child?.training_days.includes(i)} className="mr-2 accent-primary"/>{d}</label>)}</div></fieldset><label className="block text-sm font-bold">Momento<select name="timing" defaultValue={child?.training_timing ?? "after"} className={`${inputClass} mt-2`}><option value="before">Antes do treino</option><option value="after">Depois do treino</option></select></label><Button type="submit" className="w-full">{child?"Guardar alterações":"Guardar criança"}</Button></form> }
 function RecipeForm({submit}:{submit:(e:FormEvent<HTMLFormElement>)=>void}) { return <form onSubmit={submit} className="space-y-4"><label className="block text-sm font-bold">Nome<input name="name" required className={`${inputClass} mt-1`}/></label><label className="block text-sm font-bold">Descrição<textarea name="description" className="mt-1 min-h-20 w-full rounded-md border border-input bg-background p-3"/></label><div className="grid grid-cols-3 gap-3"><label className="text-xs font-bold">Idade mínima<input name="minAge" type="number" defaultValue="3" className={`${inputClass} mt-1`}/></label><label className="text-xs font-bold">Minutos<input name="time" type="number" defaultValue="15" className={`${inputClass} mt-1`}/></label><label className="text-xs font-bold">Porções<input name="portions" type="number" defaultValue="4" className={`${inputClass} mt-1`}/></label></div><label className="block text-sm font-bold">Ingredientes, um por linha<textarea name="ingredients" required placeholder={'Banana\nAveia\nOvos'} className="mt-1 min-h-28 w-full rounded-md border border-input bg-background p-3"/></label><fieldset><legend className="text-sm font-bold">Componentes do lanche</legend><div className="mt-2 flex flex-wrap gap-3">{['hidratos','proteína','fruta','vegetal'].map((x)=><label key={x} className="text-sm"><input name="components" value={x} type="checkbox" className="mr-1 accent-primary"/>{x}</label>)}</div></fieldset><div className="flex gap-5"><label className="text-sm"><input name="freezable" type="checkbox" className="mr-2 accent-primary"/>Pode congelar</label><label className="text-sm"><input name="training" type="checkbox" className="mr-2 accent-primary"/>Adequado a treino</label></div><Button type="submit" className="w-full">Guardar receita</Button></form> }
-function AuthForm({submit,google,mode,setMode}:{submit:(e:FormEvent<HTMLFormElement>)=>void;google:()=>void;mode:"login"|"signup";setMode:(m:"login"|"signup")=>void}) { return <div><p className="mb-5 text-sm text-muted-foreground">Entre para guardar perfis, receitas e planos em segurança.</p><Button variant="outline" className="mb-4 w-full" onClick={google}>Continuar com Google</Button><div className="mb-4 flex items-center gap-3 text-xs text-muted-foreground"><span className="h-px flex-1 bg-border"/>ou com email<span className="h-px flex-1 bg-border"/></div><form onSubmit={submit} className="space-y-3"><input name="email" type="email" required placeholder="Email" className={inputClass}/><input name="password" type="password" required minLength={6} placeholder="Palavra-passe" className={inputClass}/><Button type="submit" className="w-full">{mode==='login'?'Entrar':'Criar conta'}</Button></form><Button variant="ghost" className="mt-2 w-full" onClick={()=>setMode(mode==='login'?'signup':'login')}>{mode==='login'?'Ainda não tenho conta':'Já tenho conta'}</Button></div> }

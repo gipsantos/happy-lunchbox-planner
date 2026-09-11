@@ -126,6 +126,27 @@ const demoChildren: Child[] = [
 ];
 const weekDays = ["Seg", "Ter", "Qua", "Qui", "Sex"];
 const fullDays = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira"];
+const monthsShort = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+function mondayOf(base = new Date()) {
+  const d = new Date(base);
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d;
+}
+const addDays = (base: Date, n: number) => { const d = new Date(base); d.setDate(d.getDate() + n); return d; };
+const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const parseIso = (value: string) => new Date(`${value}T12:00:00`);
+const shortLabel = (d: Date) => `${d.getDate()} ${monthsShort[d.getMonth()]}`;
+// dia 0..N do plano -> data real (5 dias úteis por semana)
+const dateOfPlanDay = (start: Date, day: number) => addDays(start, Math.floor(day / 5) * 7 + (day % 5));
+const planDayOfDate = (start: Date, value: string) => {
+  const diff = Math.round((parseIso(value).getTime() - start.getTime()) / 86400000);
+  const weekday = diff % 7;
+  if (weekday < 0 || weekday > 4 || diff < 0) return -1;
+  return Math.floor(diff / 7) * 5 + weekday;
+};
+
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [

@@ -69,6 +69,7 @@ Regras:
 - "lunchboxes" são sugestões de lanche completo (combinação de itens). kind="recipe" quando o item exige preparação, kind="bought" quando é comprado pronto (iogurte, fruta, pão, tosta).
 - Cada lancheira deve ser completa: hidratos + proteína + fruta ou vegetal.
 - Preenche "ingredients" da lancheira com os itens comprados, para a lista de compras.
+- O "name" tem de descrever o lanche em si (ex.: "Muffin de cenoura + queijo fresco"). NUNCA uses nomes genéricos ou numerados como "Lancheira 1", "Opção 2" ou "Dia 3".
 - Não inventes muito: mantém-te fiel ao texto recebido. Sem markdown, sem comentários.`;
 
 export const importPlanText = createServerFn({ method: "POST" })

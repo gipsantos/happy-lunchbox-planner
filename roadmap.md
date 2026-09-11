@@ -13,4 +13,4 @@
 - [x] Plano em mobile sem scroll lateral (cartões por dia)
 - [x] Imprimir/exportar o plano (tabela) no computador
 - [x] Abrir receita a partir do detalhe da lancheira (plano e lancheiras)
-- [ ] Alinhar campos de pesquisa/filtros (Lancheiras e Receitas)
+- [x] Alinhar campos de pesquisa/filtros (Lancheiras e Receitas)

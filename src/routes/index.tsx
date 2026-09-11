@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Apple, ArrowUpDown, CalendarDays, Camera, Check, ChevronRight, Clock3, Dumbbell, FileUp, Image as ImageIcon, LayoutGrid, List, LogIn, Plus, Sandwich, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
+import { Apple, ArrowUpDown, CalendarDays, Camera, Check, ChevronRight, Clock3, Dumbbell, FileUp, Image as ImageIcon, LayoutGrid, List, LogIn, MessageCircle, Plus, Sandwich, Search, ShoppingBasket, Snowflake, Sparkles, UserRound, UtensilsCrossed, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import type { Tables } from "@/integrations/supabase/types";
@@ -450,7 +450,19 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
     a.href = url; a.download = "plano-lancheiras.csv"; a.click();
     URL.revokeObjectURL(url);
   }
-  return <section><PageHeading eyebrow={period === "week" ? "Semana de 14 a 18 de setembro" : "Setembro de 2026 · 4 semanas"} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana equilibrada" : "Um mês equilibrado"}, adaptado a cada idade e aos dias com mais energia. Toque num lanche para ver os detalhes.`} action={<div className="flex flex-wrap gap-2 print:hidden"><Button variant="outline" onClick={exportCsv}><FileUp size={17}/>Exportar</Button><Button variant="outline" onClick={()=>window.print()}><CalendarDays size={17}/>Imprimir</Button><Button variant="outline" onClick={savePlan}><Check size={17}/>Guardar</Button><Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button></div>}/>
+  function shareWhatsApp() {
+    const lines = ["*Plano de lancheiras — semana de 14 a 18 de setembro*"];
+    for (const child of children) {
+      lines.push("", `*${child.name}*`);
+      weekDays.forEach((d, i) => {
+        const cells = plan.filter((p) => p.childId === child.id && p.day === i);
+        if (cells.length) lines.push(`${d}: ${cells.map((c) => `Lanche ${c.snack} — ${nameOf(c)}`).join(" · ")}`);
+      });
+    }
+    window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank");
+  }
+  return <section><PageHeading eyebrow={period === "week" ? "Semana de 14 a 18 de setembro" : "Setembro de 2026 · 4 semanas"} title="O que vai na lancheira?" text={`${period === "week" ? "Uma semana equilibrada" : "Um mês equilibrado"}, adaptado a cada idade e aos dias com mais energia. Toque num lanche para ver os detalhes.`}/>
+    <div className="mb-6 flex flex-wrap gap-2 print:hidden"><Button variant="outline" onClick={exportCsv}><FileUp size={17}/>Exportar</Button><Button variant="outline" onClick={()=>window.print()}><CalendarDays size={17}/>Imprimir</Button><Button variant="outline" onClick={shareWhatsApp}><MessageCircle size={17}/>WhatsApp</Button><Button variant="outline" onClick={savePlan}><Check size={17}/>Guardar</Button><Button onClick={regenerate}><Sparkles size={17}/>Gerar novo plano</Button></div>
     <div className="mb-6 flex flex-wrap items-center gap-3">
       <div className="inline-flex rounded-md border border-border bg-card p-1"><Button size="sm" variant={period === "week" ? "secondary":"ghost"} onClick={()=>setPeriod("week")}>Semana</Button><Button size="sm" variant={period === "month" ? "secondary":"ghost"} onClick={()=>setPeriod("month")}>Mês</Button></div>
       <div className="inline-flex rounded-md border border-border bg-card p-1"><Button size="sm" variant={familyMode ? "secondary":"ghost"} onClick={()=>{setFamilyMode(true);setSelectedChild("all")}}>Agregado</Button><Button size="sm" variant={!familyMode ? "secondary":"ghost"} onClick={()=>{setFamilyMode(false);setSelectedChild(allChildren[0]?.id ?? "all")}}>Por filho</Button></div>
@@ -477,7 +489,7 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
       };
 
       return <>
-        <div className="lg:hidden print:hidden">
+        <div className="md:hidden print:hidden">
           <div className="mb-4 flex gap-2 overflow-x-auto">{weekDays.map((d, i) => <Button key={d} size="sm" variant={day === i ? "secondary" : "ghost"} onClick={() => setDay(i)} className="shrink-0">{d}<span className="ml-1 text-xs text-muted-foreground">{14 + i}</span></Button>)}</div>
           <p className="mb-3 text-sm font-bold">{fullDays[day]}, {14 + day} de setembro</p>
           <div className="space-y-4">{children.map((child) => {
@@ -489,7 +501,7 @@ function PlanView({ children, allChildren, recipes, lunchboxes, picked, pickedRe
           })}</div>
         </div>
 
-        <div className="hidden border-y border-border bg-card lg:block print:block"><div className="grid grid-cols-[150px_repeat(5,minmax(145px,1fr))]">
+        <div className="hidden overflow-x-auto border-y border-border bg-card md:block print:block"><div className="grid min-w-[880px] grid-cols-[150px_repeat(5,minmax(145px,1fr))]">
           <div className="border-b border-r border-border p-4 text-sm font-bold text-muted-foreground">Criança</div>{weekDays.map((d,i)=><div key={d} className="border-b border-r border-border p-4"><b>{d}</b><span className="ml-2 text-xs text-muted-foreground">{14+i} set</span></div>)}
           {children.map((child)=><div className="contents" key={child.id}><div className="border-b border-r border-border p-4"><div className="mb-1 grid size-10 place-items-center overflow-hidden rounded-full bg-leaf-soft font-bold text-primary">{images[child.id]?<img src={images[child.id]} alt="" className="size-full object-cover"/>:child.name[0]}</div><b>{child.name}</b><p className="text-xs text-muted-foreground">{child.age} anos · {child.snacks_per_day} {child.snacks_per_day===1?'lanche':'lanches'}</p></div>{weekDays.map((_,d)=>{const cells=plan.filter((p)=>p.childId===child.id&&p.day===d);return <div key={d} className="min-h-36 border-b border-r border-border p-3">{cells.map((cell,i)=>snackCard(cell,i))}{child.training_days.includes(d)&&<span className="text-[11px] font-bold text-berry">Dia de treino · reforçado</span>}</div>})}</div>)}
         </div></div>

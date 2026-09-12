@@ -199,16 +199,15 @@ function Index() {
     return () => { active = false; sub.subscription.unsubscribe(); };
   }, [navigate]);
 
-  if (!authChecked) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="text-center">
-          <span className="grid size-12 place-items-center rounded-xl bg-primary text-primary-foreground mx-auto mb-4"><Apple size={24} /></span>
-          <p className="text-sm text-muted-foreground">A preparar a sua lancheira…</p>
-        </div>
+  const loadingScreen = (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="text-center">
+        <span className="grid size-12 place-items-center rounded-xl bg-primary text-primary-foreground mx-auto mb-4"><Apple size={24} /></span>
+        <p className="text-sm text-muted-foreground">A preparar a sua lancheira…</p>
       </div>
-    );
-  }
+    </div>
+  );
+
 
   function goLogin() { navigate({ to: "/auth" }); }
 

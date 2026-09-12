@@ -512,7 +512,10 @@ function Index() {
 
   const tabs = ([['plano','Plano',CalendarDays],['lancheiras','Lancheiras',Sandwich],['receitas','Receitas',UtensilsCrossed],['compras','Compras',ShoppingBasket],['familia','Família',UserRound]] as const);
 
+  if (!authChecked) return loadingScreen;
+
   return (
+
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-6 px-4 sm:px-6">

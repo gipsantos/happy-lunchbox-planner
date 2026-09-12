@@ -199,16 +199,15 @@ function Index() {
     return () => { active = false; sub.subscription.unsubscribe(); };
   }, [navigate]);
 
-  if (!authChecked) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4">
-        <div className="text-center">
-          <span className="grid size-12 place-items-center rounded-xl bg-primary text-primary-foreground mx-auto mb-4"><Apple size={24} /></span>
-          <p className="text-sm text-muted-foreground">A preparar a sua lancheira…</p>
-        </div>
+  const loadingScreen = (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="text-center">
+        <span className="grid size-12 place-items-center rounded-xl bg-primary text-primary-foreground mx-auto mb-4"><Apple size={24} /></span>
+        <p className="text-sm text-muted-foreground">A preparar a sua lancheira…</p>
       </div>
-    );
-  }
+    </div>
+  );
+
 
   function goLogin() { navigate({ to: "/auth" }); }
 
@@ -513,7 +512,10 @@ function Index() {
 
   const tabs = ([['plano','Plano',CalendarDays],['lancheiras','Lancheiras',Sandwich],['receitas','Receitas',UtensilsCrossed],['compras','Compras',ShoppingBasket],['familia','Família',UserRound]] as const);
 
+  if (!authChecked) return loadingScreen;
+
   return (
+
     <div className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-6 px-4 sm:px-6">

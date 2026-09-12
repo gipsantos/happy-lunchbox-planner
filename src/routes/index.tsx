@@ -183,6 +183,32 @@ function Index() {
 
   const [images, setImages] = useState<Record<string, string>>({});
   const [editingChild, setEditingChild] = useState<Child | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getUser().then(({ data }) => {
+      if (!active) return;
+      if (!data.user) { navigate({ to: "/auth", replace: true }); return; }
+      setAuthChecked(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") navigate({ to: "/auth", replace: true });
+      else if (session?.user && (event === "SIGNED_IN" || event === "INITIAL_SESSION")) setAuthChecked(true);
+    });
+    return () => { active = false; sub.subscription.unsubscribe(); };
+  }, [navigate]);
+
+  if (!authChecked) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="text-center">
+          <span className="grid size-12 place-items-center rounded-xl bg-primary text-primary-foreground mx-auto mb-4"><Apple size={24} /></span>
+          <p className="text-sm text-muted-foreground">A preparar a sua lancheira…</p>
+        </div>
+      </div>
+    );
+  }
 
   function goLogin() { navigate({ to: "/auth" }); }
 
